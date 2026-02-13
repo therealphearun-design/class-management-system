@@ -1,0 +1,40 @@
+class-management-system/
+├── public/
+│   └── index.html
+├── src/
+│   ├── components/
+│   │   ├── Layout/
+│   │   │   ├── Sidebar.jsx
+│   │   │   ├── Header.jsx
+│   │   │   └── Layout.jsx
+│   │   ├── Attendance/
+│   │   │   ├── AttendancePage.jsx
+│   │   │   ├── StudentCard.jsx
+│   │   │   ├── StudentListItem.jsx
+│   │   │   └── FilterBar.jsx
+│   │   ├── Dashboard/
+│   │   │   └── DashboardPage.jsx
+│   │   ├── Schedule/
+│   │   │   └── SchedulePage.jsx
+│   │   ├── Marksheets/
+│   │   │   └── MarksheetsPage.jsx
+│   │   ├── Assignments/
+│   │   │   └── AssignmentsPage.jsx
+│   │   └── common/
+│   │       ├── Avatar.jsx
+│   │       ├── Badge.jsx
+│   │       ├── Button.jsx
+│   │       ├── Select.jsx
+│   │       └── Modal.jsx
+│   ├── data/
+│   │   └── students.js
+│   ├── context/
+│   │   └── AttendanceContext.jsx
+│   ├── hooks/
+│   │   └── useAttendance.js
+│   ├── App.jsx
+│   ├── index.js
+│   └── index.css
+├── tailwind.config.js
+├── postcss.config.js
+└── package.json

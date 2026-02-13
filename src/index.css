@@ -1,3 +1,78 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background-color: #f5f6fa;
+    color: #333;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
+  }
+}
+
+@layer components {
+  .sidebar-link {
+    @apply flex items-center gap-3 px-4 py-3 rounded-lg text-gray-300 
+           hover:bg-sidebar-hover hover:text-white transition-all duration-200 
+           text-sm font-medium;
+  }
+
+  .sidebar-link.active {
+    @apply bg-primary-600 text-white shadow-lg;
+  }
+
+  .attendance-btn {
+    @apply w-9 h-9 rounded-full flex items-center justify-center text-xs 
+           font-bold cursor-pointer transition-all duration-200 border-2;
+  }
+
+  .attendance-btn.present {
+    @apply bg-attendance-present text-white border-attendance-present 
+           shadow-md shadow-green-200;
+  }
+
+  .attendance-btn.absent {
+    @apply bg-attendance-absent text-white border-attendance-absent 
+           shadow-md shadow-red-200;
+  }
+
+  .attendance-btn.late {
+    @apply bg-attendance-late text-white border-attendance-late 
+           shadow-md shadow-yellow-200;
+  }
+
+  .attendance-btn.inactive {
+    @apply bg-white text-gray-400 border-gray-200 hover:border-gray-400;
+  }
+
+  .filter-select {
+    @apply px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-600 
+           bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 
+           focus:border-transparent appearance-none cursor-pointer
+           min-w-[180px];
+  }
+}
