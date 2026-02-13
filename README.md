@@ -1,18 +1,39 @@
-# React + Vite
+# Class_Management_System
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A web-based application built with **React + Vite** to help manage classes, students, and academic activities efficiently. This project leverages modern frontend tooling for fast development, hot module replacement (HMR), and linting support.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## 📖 Overview
+The **Class Management System** is designed to simplify academic workflows by providing tools to:
+- Manage classes and student enrollment
+- Organize schedules and assignments
+- Provide a scalable foundation for educational institutions
+- Serve as a learning project for React + Vite development
 
-## React Compiler
+---
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 🚀 Features
+- 📚 Class and student management
+- ⚡ Fast development experience with Vite
+- 🔄 Hot Module Replacement (HMR) for instant updates
+- 🛡️ ESLint integration for clean and consistent code
+- 🔧 Ready to extend with TypeScript for type safety
 
-## Expanding the ESLint configuration
+---
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
-"# Class_Management_System" 
-"# Class_Management_System" 
+## ⚙️ Tech Stack
+- **React** – UI library
+- **Vite** – Next-generation frontend tooling
+- **ESLint** – Code linting and formatting
+- **GitHub** – Version control and collaboration
+
+---
+
+## 📦 Installation
+
+Clone the repository:
+
+```bash
+git clone https://github.com/therealphearun-design/Class_Management_System.git
+cd Class_Management_System

@@ -10,31 +10,20 @@
   }
 
   body {
-    font-family: 'Inter', sans-serif;
-    background-color: #f5f6fa;
-    color: #333;
-  }
-
-  ::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  ::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 3px;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    background: #c1c1c1;
-    border-radius: 3px;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    background: #a1a1a1;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: #f3f4f6;
   }
 }
 
 @layer components {
+  .filter-select {
+    @apply bg-white border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-700
+           focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent
+           min-w-[170px];
+  }
+
   .sidebar-link {
     @apply flex items-center gap-3 px-4 py-3 rounded-lg text-gray-300 
            hover:bg-sidebar-hover hover:text-white transition-all duration-200 
@@ -42,37 +31,27 @@
   }
 
   .sidebar-link.active {
-    @apply bg-primary-600 text-white shadow-lg;
+    @apply bg-sidebar-active text-white;
   }
 
   .attendance-btn {
-    @apply w-9 h-9 rounded-full flex items-center justify-center text-xs 
-           font-bold cursor-pointer transition-all duration-200 border-2;
+    @apply w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold 
+           transition-all duration-200 border-2 cursor-pointer;
   }
 
   .attendance-btn.present {
-    @apply bg-attendance-present text-white border-attendance-present 
-           shadow-md shadow-green-200;
+    @apply bg-attendance-present text-white border-attendance-present;
   }
 
   .attendance-btn.absent {
-    @apply bg-attendance-absent text-white border-attendance-absent 
-           shadow-md shadow-red-200;
+    @apply bg-attendance-absent text-white border-attendance-absent;
   }
 
   .attendance-btn.late {
-    @apply bg-attendance-late text-white border-attendance-late 
-           shadow-md shadow-yellow-200;
+    @apply bg-attendance-late text-white border-attendance-late;
   }
 
   .attendance-btn.inactive {
     @apply bg-white text-gray-400 border-gray-200 hover:border-gray-400;
-  }
-
-  .filter-select {
-    @apply px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-600 
-           bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 
-           focus:border-transparent appearance-none cursor-pointer
-           min-w-[180px];
   }
 }

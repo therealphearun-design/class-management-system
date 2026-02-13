@@ -1,16 +1,66 @@
 import React from 'react';
+
+import { format } from 'date-fns';
+import { HiOutlineCheckCircle } from 'react-icons/hi';
+
 import FilterBar from './FilterBar';
 import StudentCard from './StudentCard';
 import StudentListItem from './StudentListItem';
 import { useAttendanceContext } from '../../context/AttendanceContext';
 import { useFilteredStudents, useAttendanceStats } from '../../hooks/useAttendance';
 import Button from '../common/Button';
-import { HiOutlineCheckCircle } from 'react-icons/hi';
 
 export default function AttendancePage() {
-  const { viewMode, markAllPresent, notification } = useAttendanceContext();
+  const {
+    currentDate,
+    selectedClass,
+    selectedSubject,
+    selectedSection,
+    selectedShift,
+    viewMode,
+    markAllPresent,
+    notification,
+    getStudentStatus,
+  } = useAttendanceContext();
   const { filteredStudents, groupedStudents } = useFilteredStudents();
   const stats = useAttendanceStats();
+
+  const exportAttendanceCsv = () => {
+    if (filteredStudents.length === 0) return;
+
+    const escapeCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+    const rows = filteredStudents.map((student) => [
+      student.rollNo,
+      student.name,
+      student.class,
+      student.section,
+      student.shift || 'Morning',
+      getStudentStatus(student.id) || 'unmarked',
+    ]);
+
+    const csvContent = [
+      ['Date', format(currentDate, 'yyyy-MM-dd')],
+      ['Class', selectedClass || 'All'],
+      ['Section', selectedSection || 'All'],
+      ['Shift', selectedShift || 'All'],
+      ['Subject', selectedSubject || 'All'],
+      [],
+      ['Roll No', 'Student Name', 'Class', 'Section', 'Shift', 'Status'],
+      ...rows,
+    ]
+      .map((line) => line.map(escapeCell).join(','))
+      .join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `attendance-${format(currentDate, 'yyyy-MM-dd')}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-6">
@@ -60,6 +110,14 @@ export default function AttendancePage() {
           onClick={() => markAllPresent(filteredStudents.map((s) => s.id))}
         >
           Mark All Present
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={exportAttendanceCsv}
+          disabled={filteredStudents.length === 0}
+        >
+          Export CSV
         </Button>
         <span className="text-sm text-gray-400">
           {filteredStudents.length} students found

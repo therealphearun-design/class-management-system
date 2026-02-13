@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+
 import { HiX } from 'react-icons/hi';
 
 export default function Modal({ isOpen, onClose, title, children }) {
@@ -16,7 +17,9 @@ export default function Modal({ isOpen, onClose, title, children }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div
+      <button
+        type="button"
+        aria-label="Close modal"
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
       />

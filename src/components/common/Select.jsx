@@ -1,4 +1,5 @@
 import React from 'react';
+
 import { HiChevronDown } from 'react-icons/hi';
 
 export default function Select({ options, value, onChange, className = '' }) {
@@ -7,7 +8,7 @@ export default function Select({ options, value, onChange, className = '' }) {
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className={`filter-select pr-10 ${className}`}
+        className={`filter-select appearance-none pr-10 ${className}`}
       >
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>

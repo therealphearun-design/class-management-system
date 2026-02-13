@@ -1,40 +1,42 @@
 class-management-system/
 ├── public/
-│   └── index.html
+│   ├── index.html
+│   ├── manifest.json
+│   ├── robots.txt
+│   └── locales/
+│       ├── en/
+│       └── es/
 ├── src/
 │   ├── components/
 │   │   ├── Layout/
-│   │   │   ├── Sidebar.jsx
-│   │   │   ├── Header.jsx
-│   │   │   └── Layout.jsx
-│   │   ├── Attendance/
-│   │   │   ├── AttendancePage.jsx
-│   │   │   ├── StudentCard.jsx
-│   │   │   ├── StudentListItem.jsx
-│   │   │   └── FilterBar.jsx
+│   │   ├── Auth/
 │   │   ├── Dashboard/
-│   │   │   └── DashboardPage.jsx
+│   │   ├── Attendance/
 │   │   ├── Schedule/
-│   │   │   └── SchedulePage.jsx
 │   │   ├── Marksheets/
-│   │   │   └── MarksheetsPage.jsx
 │   │   ├── Assignments/
-│   │   │   └── AssignmentsPage.jsx
+│   │   ├── Exams/
+│   │   ├── Certificates/
+│   │   ├── Reports/
+│   │   ├── Calendar/
 │   │   └── common/
-│   │       ├── Avatar.jsx
-│   │       ├── Badge.jsx
-│   │       ├── Button.jsx
-│   │       ├── Select.jsx
-│   │       └── Modal.jsx
-│   ├── data/
-│   │   └── students.js
 │   ├── context/
-│   │   └── AttendanceContext.jsx
 │   ├── hooks/
-│   │   └── useAttendance.js
+│   ├── services/
+│   ├── utils/
+│   ├── data/
+│   ├── i18n/
+│   ├── __tests__/
 │   ├── App.jsx
 │   ├── index.js
 │   └── index.css
-├── tailwind.config.js
-├── postcss.config.js
-└── package.json
+├── .env
+├── .env.production
+├── .eslintrc.js
+├── .prettierrc
+├── craco.config.js
+├── Dockerfile
+├── docker-compose.yml
+├── nginx.conf
+├── package.json
+└── README.md

@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
-import Avatar from '../common/Avatar';
+
 import { useAttendanceContext } from '../../context/AttendanceContext';
+import Avatar from '../common/Avatar';
 
 const StudentListItem = memo(function StudentListItem({ student }) {
   const { markAttendance, getStudentStatus } = useAttendanceContext();
@@ -13,7 +14,7 @@ const StudentListItem = memo(function StudentListItem({ student }) {
         <div>
           <h3 className="text-sm font-semibold text-gray-800">{student.name}</h3>
           <p className="text-xs text-gray-400">
-            Roll #{student.rollNo} • {student.class} - {student.section}
+            Roll #{student.rollNo} | {student.class}-{student.section} | {student.shift || 'Morning'}
           </p>
         </div>
       </div>

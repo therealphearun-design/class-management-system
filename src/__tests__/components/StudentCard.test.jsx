@@ -1,0 +1,51 @@
+import React from 'react';
+
+import { render, screen, fireEvent } from '@testing-library/react';
+
+import StudentCard from '../../components/Attendance/StudentCard';
+import { AttendanceProvider } from '../../context/AttendanceContext';
+
+const mockStudent = {
+  id: 1,
+  name: 'John Doe',
+  avatar: 'avatar-url',
+  rollNo: 123,
+};
+
+const renderWithContext = (component) => {
+  return render(
+    <AttendanceProvider>
+      {component}
+    </AttendanceProvider>
+  );
+};
+
+describe('StudentCard', () => {
+  it('renders student name correctly', () => {
+    renderWithContext(<StudentCard student={mockStudent} />);
+    expect(screen.getByText('John Doe')).toBeInTheDocument();
+  });
+
+  it('displays roll number', () => {
+    renderWithContext(<StudentCard student={mockStudent} />);
+    expect(screen.getByText(/Roll #123/)).toBeInTheDocument();
+  });
+
+  it('marks attendance when P button is clicked', () => {
+    renderWithContext(<StudentCard student={mockStudent} />);
+    const presentButton = screen.getByText('P');
+    fireEvent.click(presentButton);
+    expect(presentButton).toHaveClass('present');
+  });
+
+  it('toggles attendance status on repeated clicks', () => {
+    renderWithContext(<StudentCard student={mockStudent} />);
+    const presentButton = screen.getByText('P');
+    
+    fireEvent.click(presentButton);
+    expect(presentButton).toHaveClass('present');
+    
+    fireEvent.click(presentButton);
+    expect(presentButton).toHaveClass('inactive');
+  });
+});

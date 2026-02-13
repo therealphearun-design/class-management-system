@@ -1,4 +1,5 @@
 import React from 'react';
+
 import { format, addDays, subDays } from 'date-fns';
 import {
   HiOutlineChevronLeft,
@@ -7,10 +8,12 @@ import {
   HiOutlineViewGrid,
   HiOutlineViewList,
 } from 'react-icons/hi';
-import Select from '../common/Select';
-import Button from '../common/Button';
+
 import { useAttendanceContext } from '../../context/AttendanceContext';
-import { classOptions, subjectOptions, sectionOptions } from '../../data/students';
+import { classOptions, subjectOptions, sectionOptions, shiftOptions } from '../../data/students';
+import { useFilteredStudents } from '../../hooks/useAttendance';
+import Button from '../common/Button';
+import Select from '../common/Select';
 
 export default function FilterBar() {
   const {
@@ -18,6 +21,7 @@ export default function FilterBar() {
     selectedClass,
     selectedSubject,
     selectedSection,
+    selectedShift,
     viewMode,
     isSubmitting,
     setDate,
@@ -25,6 +29,7 @@ export default function FilterBar() {
     setViewMode,
     submitAttendance,
   } = useAttendanceContext();
+  const { filteredStudents } = useFilteredStudents();
 
   return (
     <div className="space-y-4">
@@ -101,13 +106,18 @@ export default function FilterBar() {
             value={selectedSection}
             onChange={(val) => setFilter('selectedSection', val)}
           />
+          <Select
+            options={shiftOptions}
+            value={selectedShift}
+            onChange={(val) => setFilter('selectedShift', val)}
+          />
         </div>
 
         <Button
           variant="primary"
           size="lg"
           loading={isSubmitting}
-          onClick={submitAttendance}
+          onClick={() => submitAttendance(filteredStudents.map((s) => s.id))}
         >
           {isSubmitting ? 'Submitting...' : 'Take Attendance'}
         </Button>

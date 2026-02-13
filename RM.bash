@@ -1,13 +1,20 @@
-# 1. Create the project
-npx create-react-app class-management-system
-cd class-management-system
+# Core dependencies
+npm install react-router-dom react-icons date-fns framer-motion recharts axios
 
-# 2. Install dependencies
-npm install react-router-dom react-icons date-fns
-npm install -D tailwindcss postcss autoprefixer
-npx tailwindcss init -p
+# PWA support
+npm install workbox-core workbox-precaching workbox-routing workbox-strategies workbox-cacheable-response workbox-expiration
 
-# 3. Replace the files with the code above
+# I18n
+npm install i18next react-i18next i18next-browser-languagedetector i18next-http-backend
 
-# 4. Start the development server
-npm start
+# File upload
+npm install react-dropzone
+
+# Testing
+npm install --save-dev @testing-library/react @testing-library/jest-dom @testing-library/user-event
+
+# Build optimization
+npm install --save-dev @craco/craco compression-webpack-plugin webpack-bundle-analyzer
+
+# Linting/Formatting
+npm install --save-dev eslint eslint-plugin-react eslint-plugin-react-hooks eslint-plugin-jsx-a11y eslint-plugin-import prettier

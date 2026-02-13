@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
-import Avatar from '../common/Avatar';
+
 import { useAttendanceContext } from '../../context/AttendanceContext';
+import Avatar from '../common/Avatar';
 
 const StudentCard = memo(function StudentCard({ student }) {
   const { markAttendance, getStudentStatus } = useAttendanceContext();
@@ -12,7 +13,6 @@ const StudentCard = memo(function StudentCard({ student }) {
 
   return (
     <div className="bg-white rounded-xl p-5 shadow-card hover:shadow-lg transition-all duration-300 group border border-transparent hover:border-primary-100">
-      {/* Student info */}
       <div className="flex flex-col items-center text-center mb-4">
         <div className="relative mb-3">
           <Avatar src={student.avatar} name={student.name} size="lg" />
@@ -24,17 +24,18 @@ const StudentCard = memo(function StudentCard({ student }) {
                 ${status === 'late' ? 'bg-attendance-late' : ''}
               `}
             >
-              {status === 'present' ? '✓' : status === 'absent' ? '✕' : 'L'}
+              {status === 'present' ? 'P' : status === 'absent' ? 'A' : 'L'}
             </div>
           )}
         </div>
         <h3 className="text-sm font-semibold text-gray-800 group-hover:text-primary-600 transition-colors">
           {student.name}
         </h3>
-        <p className="text-xs text-gray-400 mt-0.5">Roll #{student.rollNo}</p>
+        <p className="text-xs text-gray-400 mt-0.5">
+          Roll #{student.rollNo} | {student.class}-{student.section} | {student.shift || 'Morning'}
+        </p>
       </div>
 
-      {/* Attendance buttons */}
       <div className="flex items-center justify-center gap-3">
         <button
           onClick={() => handleMark('present')}

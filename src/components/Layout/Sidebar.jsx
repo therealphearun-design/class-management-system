@@ -1,43 +1,58 @@
-import React from 'react';
-import { NavLink } from 'react-router-dom';
+import React, { useState } from 'react';
+
 import {
   HiOutlineHome,
   HiOutlineClipboardCheck,
+  HiOutlineUserGroup,
   HiOutlineCalendar,
   HiOutlineDocumentText,
   HiOutlineBookOpen,
   HiOutlineAcademicCap,
   HiOutlineBadgeCheck,
-  HiOutlineCurrencyDollar,
   HiOutlineChartBar,
   HiOutlineMail,
   HiOutlineClock,
   HiOutlineClipboardList,
+  HiOutlineUser,
 } from 'react-icons/hi';
+import { NavLink } from 'react-router-dom';
 
 const menuItems = [
   { path: '/', icon: HiOutlineHome, label: 'Dashboard' },
   { path: '/attendance', icon: HiOutlineClipboardCheck, label: 'Attendance' },
+  { path: '/students', icon: HiOutlineUserGroup, label: 'Students' },
   { path: '/schedule', icon: HiOutlineCalendar, label: 'Class Schedule' },
   { path: '/marksheets', icon: HiOutlineDocumentText, label: 'Marksheets' },
   { path: '/assignments', icon: HiOutlineBookOpen, label: 'Assignments' },
   { path: '/exams', icon: HiOutlineAcademicCap, label: 'Exams List' },
   { path: '/certificates', icon: HiOutlineBadgeCheck, label: 'Certificates' },
-  { path: '/payroll', icon: HiOutlineCurrencyDollar, label: 'Payroll' },
   { path: '/reports', icon: HiOutlineChartBar, label: 'Reports' },
   { path: '/messages', icon: HiOutlineMail, label: 'SMS/Mail' },
   { path: '/calendar', icon: HiOutlineClock, label: 'Calendar' },
   { path: '/todos', icon: HiOutlineClipboardList, label: 'To Do List' },
+  { path: '/profile', icon: HiOutlineUser, label: 'My Profile' },
 ];
 
 export default function Sidebar({ isOpen, onClose }) {
+  const [showCredit, setShowCredit] = useState(false);
+
+  const handleLogoClick = () => {
+    setShowCredit(true);
+    window.setTimeout(() => setShowCredit(false), 3000);
+  };
+
   return (
     <>
       {/* Mobile overlay */}
       {isOpen && (
-        <div
+        <button
+          type="button"
+          aria-label="Close sidebar"
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
           onClick={onClose}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') onClose();
+          }}
         />
       )}
 
@@ -51,9 +66,14 @@ export default function Sidebar({ isOpen, onClose }) {
       >
         {/* Logo */}
         <div className="flex items-center gap-3 px-6 py-5 border-b border-white/10">
-          <div className="w-10 h-10 bg-primary-500 rounded-xl flex items-center justify-center">
+          <button
+            type="button"
+            onClick={handleLogoClick}
+            className="w-10 h-10 bg-primary-500 rounded-xl flex items-center justify-center hover:bg-primary-400 transition-colors"
+            aria-label="Project credits"
+          >
             <span className="text-white font-bold text-lg">C</span>
-          </div>
+          </button>
           <div>
             <h1 className="text-white font-bold text-xl tracking-wide">Class</h1>
             <p className="text-gray-400 text-[10px] uppercase tracking-wider">
@@ -61,6 +81,12 @@ export default function Sidebar({ isOpen, onClose }) {
             </p>
           </div>
         </div>
+
+        {showCredit && (
+          <div className="mx-3 mt-3 px-3 py-2 rounded-lg bg-primary-500/20 border border-primary-400/40 text-xs text-blue-100">
+            This project was created by PCE Team.
+          </div>
+        )}
 
         {/* Navigation */}
         <nav className="mt-4 px-3 space-y-1 overflow-y-auto h-[calc(100%-80px)] pb-6">

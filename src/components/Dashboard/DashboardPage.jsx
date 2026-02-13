@@ -1,35 +1,112 @@
-import React from 'react';
+import React, { useMemo } from 'react';
+
 import {
-  HiOutlineUsers,
   HiOutlineAcademicCap,
   HiOutlineClipboardCheck,
+  HiOutlineClock,
+  HiOutlineDocumentText,
   HiOutlineTrendingUp,
+  HiOutlineUsers,
 } from 'react-icons/hi';
+import { useNavigate } from 'react-router-dom';
 
-const stats = [
-  { label: 'Total Students', value: '1,250', icon: HiOutlineUsers, color: 'bg-blue-500', change: '+12%' },
-  { label: 'Total Classes', value: '48', icon: HiOutlineAcademicCap, color: 'bg-purple-500', change: '+3%' },
-  { label: 'Attendance Rate', value: '94.2%', icon: HiOutlineClipboardCheck, color: 'bg-green-500', change: '+2.1%' },
-  { label: 'Performance', value: '87.5%', icon: HiOutlineTrendingUp, color: 'bg-orange-500', change: '+5.4%' },
-];
+import { studentsData } from '../../data/students';
 
-const recentActivities = [
-  { id: 1, text: 'Class 10-A attendance submitted', time: '2 min ago', type: 'attendance' },
-  { id: 2, text: 'New assignment posted for Class 9-B', time: '15 min ago', type: 'assignment' },
-  { id: 3, text: 'Marksheet updated for mid-term exams', time: '1 hour ago', type: 'marks' },
-  { id: 4, text: 'Parent meeting scheduled for Class 8-A', time: '2 hours ago', type: 'event' },
-  { id: 5, text: 'Report cards generated for Class 10-B', time: '3 hours ago', type: 'report' },
-];
+const ATTENDANCE_STORAGE_KEY = 'attendance_records_v1';
+
+function getAttendanceSummary() {
+  try {
+    const raw = localStorage.getItem(ATTENDANCE_STORAGE_KEY);
+    const records = raw ? JSON.parse(raw) : {};
+    const dates = Object.keys(records || {}).sort();
+    if (dates.length === 0) return { rate: 0, marked: 0 };
+
+    const latestDate = dates[dates.length - 1];
+    const latest = records[latestDate] || {};
+    const statuses = Object.values(latest).filter(Boolean);
+    const marked = statuses.length;
+    if (marked === 0) return { rate: 0, marked: 0 };
+    const present = statuses.filter((s) => s === 'present').length;
+    return { rate: Math.round((present / marked) * 1000) / 10, marked };
+  } catch (_error) {
+    return { rate: 0, marked: 0 };
+  }
+}
 
 export default function DashboardPage() {
+  const navigate = useNavigate();
+
+  const dashboard = useMemo(() => {
+    const totalStudents = studentsData.length;
+    const classCount = new Set(studentsData.map((s) => s.class)).size;
+    const sectionCount = new Set(studentsData.map((s) => s.section)).size;
+    const shiftCount = new Set(studentsData.map((s) => s.shift)).size;
+    const attendance = getAttendanceSummary();
+
+    return {
+      totalStudents,
+      classCount,
+      sectionCount,
+      shiftCount,
+      attendanceRate: attendance.rate,
+      markedCount: attendance.marked,
+    };
+  }, []);
+
+  const stats = [
+    {
+      label: 'Total Students',
+      value: dashboard.totalStudents,
+      icon: HiOutlineUsers,
+      color: 'bg-blue-500',
+      hint: `${dashboard.classCount} classes`,
+    },
+    {
+      label: 'Total Classes',
+      value: dashboard.classCount,
+      icon: HiOutlineAcademicCap,
+      color: 'bg-purple-500',
+      hint: `${dashboard.sectionCount} sections`,
+    },
+    {
+      label: 'Attendance Rate',
+      value: `${dashboard.attendanceRate}%`,
+      icon: HiOutlineClipboardCheck,
+      color: 'bg-green-500',
+      hint: `${dashboard.markedCount} records marked`,
+    },
+    {
+      label: 'Study Shifts',
+      value: dashboard.shiftCount,
+      icon: HiOutlineClock,
+      color: 'bg-orange-500',
+      hint: 'Morning / Afternoon',
+    },
+  ];
+
+  const recentActivities = [
+    { id: 1, text: `${dashboard.totalStudents} active students in system`, time: 'Now' },
+    { id: 2, text: `${dashboard.classCount} classes configured (9A to 12F)`, time: 'Now' },
+    { id: 3, text: `${dashboard.shiftCount} study shifts available`, time: 'Now' },
+    { id: 4, text: 'Certificates page updated with live create/issue actions', time: 'Recent' },
+    { id: 5, text: 'Assignments page supports create + status filters', time: 'Recent' },
+  ];
+
+  const quickActions = [
+    { label: 'Take Attendance', color: 'bg-green-100 text-green-700', to: '/attendance' },
+    { label: 'Manage Students', color: 'bg-blue-100 text-blue-700', to: '/students' },
+    { label: 'Create Assignment', color: 'bg-purple-100 text-purple-700', to: '/assignments' },
+    { label: 'View Reports', color: 'bg-orange-100 text-orange-700', to: '/reports' },
+    { label: 'Issue Certificate', color: 'bg-pink-100 text-pink-700', to: '/certificates' },
+  ];
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
-        <p className="text-sm text-gray-500 mt-1">Welcome back! Here's your overview.</p>
+        <p className="text-sm text-gray-500 mt-1">Current overview of classes, students, and operations.</p>
       </div>
 
-      {/* Stats cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat) => (
           <div
@@ -46,16 +123,14 @@ export default function DashboardPage() {
               </div>
             </div>
             <div className="mt-3 flex items-center gap-1">
-              <span className="text-xs font-medium text-green-500">{stat.change}</span>
-              <span className="text-xs text-gray-400">from last month</span>
+              <HiOutlineTrendingUp className="w-3.5 h-3.5 text-green-500" />
+              <span className="text-xs text-gray-500">{stat.hint}</span>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Content grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Recent activities */}
         <div className="lg:col-span-2 bg-white rounded-xl shadow-card">
           <div className="px-6 py-4 border-b border-gray-100">
             <h2 className="font-semibold text-gray-800">Recent Activities</h2>
@@ -76,24 +151,25 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Quick links */}
         <div className="bg-white rounded-xl shadow-card p-6">
           <h2 className="font-semibold text-gray-800 mb-4">Quick Actions</h2>
           <div className="space-y-3">
-            {[
-              { label: 'Take Attendance', color: 'bg-green-100 text-green-700' },
-              { label: 'Create Assignment', color: 'bg-blue-100 text-blue-700' },
-              { label: 'View Reports', color: 'bg-purple-100 text-purple-700' },
-              { label: 'Send Message', color: 'bg-orange-100 text-orange-700' },
-              { label: 'Schedule Class', color: 'bg-pink-100 text-pink-700' },
-            ].map((action) => (
+            {quickActions.map((action) => (
               <button
                 key={action.label}
+                type="button"
+                onClick={() => navigate(action.to)}
                 className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium ${action.color} hover:opacity-80 transition-opacity`}
               >
                 {action.label}
               </button>
             ))}
+          </div>
+          <div className="mt-5 p-3 rounded-lg bg-gray-50 border border-gray-100">
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <HiOutlineDocumentText className="w-4 h-4" />
+              Latest attendance records: {dashboard.markedCount}
+            </div>
           </div>
         </div>
       </div>

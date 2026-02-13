@@ -1,39 +1,46 @@
 import { useMemo } from 'react';
-import { studentsData } from '../data/students';
+
+import { format } from 'date-fns';
+
 import { useAttendanceContext } from '../context/AttendanceContext';
+import { studentsData } from '../data/students';
 
 export function useFilteredStudents() {
-  const { selectedClass, selectedSection } = useAttendanceContext();
+  const { selectedClass, selectedSection, selectedShift } = useAttendanceContext();
 
   const filteredStudents = useMemo(() => {
     let students = [...studentsData];
 
     if (selectedClass) {
-      students = students.filter((s) => s.class === selectedClass);
+      students = students.filter(s => s.class === selectedClass);
     }
     if (selectedSection) {
-      students = students.filter((s) => s.section === selectedSection);
+      students = students.filter(s => s.section === selectedSection);
+    }
+    if (selectedShift) {
+      students = students.filter(s => s.shift === selectedShift);
     }
 
     return students;
-  }, [selectedClass, selectedSection]);
+  }, [selectedClass, selectedSection, selectedShift]);
 
   const groupedStudents = useMemo(() => {
     const groups = {};
-    filteredStudents.forEach((student) => {
-      const letter = student.name.charAt(0).toUpperCase();
-      if (!groups[letter]) {
-        groups[letter] = [];
+    
+    filteredStudents.forEach(student => {
+      const firstLetter = student.name.charAt(0).toUpperCase();
+      if (!groups[firstLetter]) {
+        groups[firstLetter] = [];
       }
-      groups[letter].push(student);
+      groups[firstLetter].push(student);
     });
 
-    // Sort alphabetically
+    // Sort groups alphabetically
     const sortedGroups = {};
     Object.keys(groups)
       .sort()
-      .forEach((key) => {
-        sortedGroups[key] = groups[key].sort((a, b) =>
+      .forEach(key => {
+        sortedGroups[key] = groups[key].sort((a, b) => 
           a.name.localeCompare(b.name)
         );
       });
@@ -49,17 +56,16 @@ export function useAttendanceStats() {
   const { filteredStudents } = useFilteredStudents();
 
   return useMemo(() => {
-    const dateKey = currentDate.toISOString().split('T')[0];
+    const dateKey = format(currentDate, 'yyyy-MM-dd');
     const dayRecords = records[dateKey] || {};
-    const studentIds = filteredStudents.map((s) => s.id);
-
+    
     let present = 0;
     let absent = 0;
     let late = 0;
     let unmarked = 0;
 
-    studentIds.forEach((id) => {
-      const status = dayRecords[id];
+    filteredStudents.forEach(student => {
+      const status = dayRecords[student.id];
       if (status === 'present') present++;
       else if (status === 'absent') absent++;
       else if (status === 'late') late++;
@@ -67,7 +73,7 @@ export function useAttendanceStats() {
     });
 
     return {
-      total: studentIds.length,
+      total: filteredStudents.length,
       present,
       absent,
       late,
