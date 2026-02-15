@@ -15,6 +15,7 @@ import {
 } from 'react-icons/hi';
 import { useNavigate } from 'react-router-dom';
 
+import { getRoleLabel } from '../../constants/roles';
 import { useAuth } from '../../context/AuthContext';
 import Avatar from '../common/Avatar';
 
@@ -162,7 +163,7 @@ export default function EnhancedHeader({ onMenuToggle }) {
           >
             <div className="text-right hidden sm:block">
               <p className="text-sm font-semibold text-gray-700">{user?.name || 'Brittany Babotts'}</p>
-              <p className="text-xs text-gray-400">{user?.role || 'Teacher'}</p>
+              <p className="text-xs text-gray-400">{getRoleLabel(user?.role)}</p>
             </div>
             <Avatar
               name={user?.name || 'Brittany Babotts'}

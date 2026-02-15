@@ -10,6 +10,8 @@ import {
 } from 'react-icons/hi';
 import { useNavigate } from 'react-router-dom';
 
+import { ACCOUNT_ROLES, normalizeRole } from '../../constants/roles';
+import { useAuth } from '../../context/AuthContext';
 import { studentsData } from '../../data/students';
 
 const ATTENDANCE_STORAGE_KEY = 'attendance_records_v1';
@@ -35,6 +37,9 @@ function getAttendanceSummary() {
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const role = normalizeRole(user?.role);
+  const isTeacher = role === ACCOUNT_ROLES.TEACHER;
 
   const dashboard = useMemo(() => {
     const totalStudents = studentsData.length;
@@ -84,21 +89,37 @@ export default function DashboardPage() {
     },
   ];
 
-  const recentActivities = [
-    { id: 1, text: `${dashboard.totalStudents} active students in system`, time: 'Now' },
-    { id: 2, text: `${dashboard.classCount} classes configured (9A to 12F)`, time: 'Now' },
-    { id: 3, text: `${dashboard.shiftCount} study shifts available`, time: 'Now' },
-    { id: 4, text: 'Certificates page updated with live create/issue actions', time: 'Recent' },
-    { id: 5, text: 'Assignments page supports create + status filters', time: 'Recent' },
-  ];
+  const recentActivities = isTeacher
+    ? [
+        { id: 1, text: `${dashboard.totalStudents} active students in system`, time: 'Now' },
+        { id: 2, text: `${dashboard.classCount} classes configured (9A to 12F)`, time: 'Now' },
+        { id: 3, text: `${dashboard.shiftCount} study shifts available`, time: 'Now' },
+        { id: 4, text: 'Certificates page updated with live create/issue actions', time: 'Recent' },
+        { id: 5, text: 'Assignments page supports create + status filters', time: 'Recent' },
+      ]
+    : [
+        { id: 1, text: 'Your dashboard is ready for class updates.', time: 'Now' },
+        { id: 2, text: 'Check your assignments and due dates.', time: 'Now' },
+        { id: 3, text: 'Review exam schedule and marksheets.', time: 'Now' },
+        { id: 4, text: 'Use calendar to track class activities.', time: 'Recent' },
+        { id: 5, text: 'Keep your profile updated for notifications.', time: 'Recent' },
+      ];
 
-  const quickActions = [
-    { label: 'Take Attendance', color: 'bg-green-100 text-green-700', to: '/attendance' },
-    { label: 'Manage Students', color: 'bg-blue-100 text-blue-700', to: '/students' },
-    { label: 'Create Assignment', color: 'bg-purple-100 text-purple-700', to: '/assignments' },
-    { label: 'View Reports', color: 'bg-orange-100 text-orange-700', to: '/reports' },
-    { label: 'Issue Certificate', color: 'bg-pink-100 text-pink-700', to: '/certificates' },
-  ];
+  const quickActions = isTeacher
+    ? [
+        { label: 'Take Attendance', color: 'bg-green-100 text-green-700', to: '/attendance' },
+        { label: 'Manage Students', color: 'bg-blue-100 text-blue-700', to: '/students' },
+        { label: 'Create Assignment', color: 'bg-purple-100 text-purple-700', to: '/assignments' },
+        { label: 'View Reports', color: 'bg-orange-100 text-orange-700', to: '/reports' },
+        { label: 'Issue Certificate', color: 'bg-pink-100 text-pink-700', to: '/certificates' },
+      ]
+    : [
+        { label: 'View Assignments', color: 'bg-purple-100 text-purple-700', to: '/assignments' },
+        { label: 'Exam Schedule', color: 'bg-indigo-100 text-indigo-700', to: '/exams' },
+        { label: 'View Marksheets', color: 'bg-blue-100 text-blue-700', to: '/marksheets' },
+        { label: 'Open Calendar', color: 'bg-green-100 text-green-700', to: '/calendar' },
+        { label: 'My Profile', color: 'bg-orange-100 text-orange-700', to: '/profile' },
+      ];
 
   return (
     <div className="space-y-6">

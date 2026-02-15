@@ -9,6 +9,8 @@ import {
   HiOutlineDocumentDownload,
 } from 'react-icons/hi';
 
+import { ACCOUNT_ROLES, normalizeRole } from '../../constants/roles';
+import { useAuth } from '../../context/AuthContext';
 import { classOptions } from '../../data/students';
 import { examsAPI } from '../../services/api';
 import Badge from '../common/Badge';
@@ -24,6 +26,8 @@ const examStatusColors = {
 };
 
 export default function ExamsPage() {
+  const { user } = useAuth();
+  const isTeacher = normalizeRole(user?.role) === ACCOUNT_ROLES.TEACHER;
   const [exams, setExams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -149,19 +153,23 @@ export default function ExamsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Exams List</h1>
+          <h1 className="text-2xl font-bold text-gray-800">
+            {isTeacher ? 'Exams List' : 'Exam Schedule'}
+          </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Manage examinations and results
+            {isTeacher ? 'Manage examinations and results' : 'View your exam schedule and details'}
           </p>
         </div>
-        <Button
-          variant="primary"
-          size="lg"
-          icon={HiOutlinePlus}
-          onClick={() => setShowCreateModal(true)}
-        >
-          Schedule Exam
-        </Button>
+        {isTeacher && (
+          <Button
+            variant="primary"
+            size="lg"
+            icon={HiOutlinePlus}
+            onClick={() => setShowCreateModal(true)}
+          >
+            Schedule Exam
+          </Button>
+        )}
       </div>
 
       {/* Stats */}
@@ -213,7 +221,7 @@ export default function ExamsPage() {
         onClose={() => setSelectedExam(null)}
         title={selectedExam?.name}
       >
-        {selectedExam && <ExamDetails exam={selectedExam} />}
+        {selectedExam && <ExamDetails exam={selectedExam} isTeacher={isTeacher} />}
       </Modal>
     </div>
   );
@@ -378,7 +386,7 @@ function CreateExamForm({ onSuccess }) {
   );
 }
 
-function ExamDetails({ exam }) {
+function ExamDetails({ exam, isTeacher }) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4">
@@ -430,17 +438,19 @@ function ExamDetails({ exam }) {
         </div>
       )}
 
-      <div className="flex justify-end gap-3">
-        <Button variant="secondary">Edit</Button>
-        {exam.status === 'completed' && (
-          <Button variant="primary" icon={HiOutlineDocumentDownload}>
-            Download Results
-          </Button>
-        )}
-        {exam.status === 'scheduled' && (
-          <Button variant="success">Start Exam</Button>
-        )}
-      </div>
+      {isTeacher ? (
+        <div className="flex justify-end gap-3">
+          <Button variant="secondary">Edit</Button>
+          {exam.status === 'completed' && (
+            <Button variant="primary" icon={HiOutlineDocumentDownload}>
+              Download Results
+            </Button>
+          )}
+          {exam.status === 'scheduled' && (
+            <Button variant="success">Start Exam</Button>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

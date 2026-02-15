@@ -62,6 +62,72 @@ export default function AttendancePage() {
     URL.revokeObjectURL(url);
   };
 
+  const exportAttendanceExcel = () => {
+    if (filteredStudents.length === 0) return;
+
+    const escapeHtml = (value) =>
+      String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    const rows = filteredStudents
+      .map(
+        (student) => `
+          <tr>
+            <td>${escapeHtml(student.rollNo)}</td>
+            <td>${escapeHtml(student.name)}</td>
+            <td>${escapeHtml(student.class)}</td>
+            <td>${escapeHtml(student.section)}</td>
+            <td>${escapeHtml(student.shift || 'Morning')}</td>
+            <td>${escapeHtml(getStudentStatus(student.id) || 'unmarked')}</td>
+          </tr>
+        `
+      )
+      .join('');
+
+    const html = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
+      <head>
+        <meta charset="UTF-8" />
+      </head>
+      <body>
+        <table border="1">
+          <tr><th>Date</th><td>${escapeHtml(format(currentDate, 'yyyy-MM-dd'))}</td></tr>
+          <tr><th>Class</th><td>${escapeHtml(selectedClass || 'All')}</td></tr>
+          <tr><th>Section</th><td>${escapeHtml(selectedSection || 'All')}</td></tr>
+          <tr><th>Shift</th><td>${escapeHtml(selectedShift || 'All')}</td></tr>
+          <tr><th>Subject</th><td>${escapeHtml(selectedSubject || 'All')}</td></tr>
+        </table>
+        <br />
+        <table border="1">
+          <tr>
+            <th>Roll No</th>
+            <th>Student Name</th>
+            <th>Class</th>
+            <th>Section</th>
+            <th>Shift</th>
+            <th>Status</th>
+          </tr>
+          ${rows}
+        </table>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `attendance-${format(currentDate, 'yyyy-MM-dd')}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6">
       {/* Notification */}
@@ -118,6 +184,14 @@ export default function AttendancePage() {
           disabled={filteredStudents.length === 0}
         >
           Export CSV
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={exportAttendanceExcel}
+          disabled={filteredStudents.length === 0}
+        >
+          Export Excel
         </Button>
         <span className="text-sm text-gray-400">
           {filteredStudents.length} students found

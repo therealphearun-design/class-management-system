@@ -6,11 +6,12 @@ import {
   HiOutlineTrash,
 } from 'react-icons/hi';
 
+import { ACCOUNT_ROLES, normalizeRole } from '../../constants/roles';
+import { useAuth } from '../../context/AuthContext';
 import Button from '../common/Button';
 
 const STORAGE_KEY = 'cms_todos_v1';
-
-const defaultTodos = [
+const teacherDefaultTodos = [
   {
     id: 1,
     title: 'Review attendance report for Grade 10',
@@ -27,19 +28,41 @@ const defaultTodos = [
   },
 ];
 
-function getInitialTodos() {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (!saved) return defaultTodos;
+const studentDefaultTodos = [
+  {
+    id: 1,
+    title: 'Complete Mathematics assignment',
+    priority: 'High',
+    dueDate: '2026-02-16',
+    completed: false,
+  },
+  {
+    id: 2,
+    title: 'Prepare for upcoming exam schedule',
+    priority: 'Medium',
+    dueDate: '2026-02-18',
+    completed: false,
+  },
+];
+
+function getInitialTodos(role) {
+  const storageKey = `${STORAGE_KEY}_${role}`;
+  const saved = localStorage.getItem(storageKey);
+  if (!saved) return role === ACCOUNT_ROLES.STUDENT ? studentDefaultTodos : teacherDefaultTodos;
   try {
     const parsed = JSON.parse(saved);
-    return Array.isArray(parsed) ? parsed : defaultTodos;
+    if (Array.isArray(parsed)) return parsed;
   } catch {
-    return defaultTodos;
+    // Ignore parse errors and fallback below.
   }
+  return role === ACCOUNT_ROLES.STUDENT ? studentDefaultTodos : teacherDefaultTodos;
 }
 
 export default function TodosPage() {
-  const [todos, setTodos] = useState(getInitialTodos);
+  const { user } = useAuth();
+  const role = normalizeRole(user?.role);
+  const isStudent = role === ACCOUNT_ROLES.STUDENT;
+  const [todos, setTodos] = useState(() => getInitialTodos(role));
   const [title, setTitle] = useState('');
   const [priority, setPriority] = useState('Medium');
   const [dueDate, setDueDate] = useState('');
@@ -53,7 +76,7 @@ export default function TodosPage() {
 
   const persist = (nextTodos) => {
     setTodos(nextTodos);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(nextTodos));
+    localStorage.setItem(`${STORAGE_KEY}_${role}`, JSON.stringify(nextTodos));
   };
 
   const addTodo = (e) => {
@@ -98,7 +121,9 @@ export default function TodosPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-800">To Do List</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Track administrative work and daily teaching tasks.
+          {isStudent
+            ? 'Track your assignment and exam preparation tasks.'
+            : 'Track administrative work and daily teaching tasks.'}
         </p>
       </div>
 

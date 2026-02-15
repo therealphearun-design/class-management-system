@@ -1,67 +1,26 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 import { format } from 'date-fns';
-import { motion } from 'framer-motion';
 import {
   HiOutlineBadgeCheck,
   HiOutlineDocumentDownload,
   HiOutlineMail,
   HiOutlinePlus,
+  HiOutlineTrash,
 } from 'react-icons/hi';
 
 import { studentsData } from '../../data/students';
+import { certificatesAPI, studentsAPI } from '../../services/api';
 import Badge from '../common/Badge';
 import Button from '../common/Button';
 import DataTable from '../common/DataTable';
 import Modal from '../common/Modal';
 
-const currentStudents = studentsData.slice(0, 4).map((s) => s.name);
-const initialCertificates = [
-  {
-    id: 1,
-    studentName: currentStudents[0] || 'Student 1',
-    certificateType: 'Achievement',
-    issueDate: '2026-02-01',
-    status: 'issued',
-    grade: 'A',
-    description: 'Excellence in Mathematics',
-  },
-  {
-    id: 2,
-    studentName: currentStudents[1] || 'Student 2',
-    certificateType: 'Participation',
-    issueDate: '2026-02-02',
-    status: 'issued',
-    grade: 'B+',
-    description: 'Science Fair Participant',
-  },
-  {
-    id: 3,
-    studentName: currentStudents[2] || 'Student 3',
-    certificateType: 'Merit',
-    issueDate: '2026-02-05',
-    status: 'pending',
-    grade: 'A-',
-    description: 'Academic Excellence',
-  },
-  {
-    id: 4,
-    studentName: currentStudents[3] || 'Student 4',
-    certificateType: 'Completion',
-    issueDate: '',
-    status: 'draft',
-    grade: 'A',
-    description: 'Course Completion Certificate',
-  },
-];
+const LOCAL_CERTIFICATES_KEY = 'certificates_local_v2';
+const LOCAL_STUDENTS_KEY = 'students_local_v2';
 
-const certificateTemplates = [
-  { id: 1, name: 'Achievement Certificate', preview: 'AC', students: 45 },
-  { id: 2, name: 'Participation Certificate', preview: 'PC', students: 78 },
-  { id: 3, name: 'Merit Certificate', preview: 'MC', students: 23 },
-  { id: 4, name: 'Completion Certificate', preview: 'CC', students: 156 },
-  { id: 5, name: 'Sports Excellence', preview: 'SE', students: 34 },
-];
+const CERTIFICATE_TYPES = ['Achievement', 'Participation', 'Merit', 'Completion', 'Sports Excellence'];
+const CERTIFICATE_STATUSES = ['issued', 'pending', 'draft'];
 
 const statusColors = {
   issued: 'success',
@@ -69,82 +28,164 @@ const statusColors = {
   draft: 'neutral',
 };
 
+const readLocalList = (key) => {
+  try {
+    const raw = localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveLocalCertificates = (items) => {
+  try {
+    localStorage.setItem(LOCAL_CERTIFICATES_KEY, JSON.stringify(items));
+  } catch {
+    // Ignore offline storage errors.
+  }
+};
+
+const mergeUniqueById = (items) => {
+  const map = new Map();
+  items.forEach((item) => map.set(String(item.id), item));
+  return Array.from(map.values());
+};
+
+const makeStudentEmail = (name) => {
+  const slug = String(name || 'student')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '.')
+    .replace(/(^\.|\.$)/g, '');
+  return `${slug || 'student'}@class.local`;
+};
+
+const normalizeStudent = (student) => ({
+  ...student,
+  section: student.section || 'A',
+  shift: student.shift || 'Morning',
+  email: student.email || makeStudentEmail(student.name),
+});
+
+const normalizeCertificate = (certificate, studentsById) => {
+  const student = studentsById.get(String(certificate.studentId)) || null;
+  const status = CERTIFICATE_STATUSES.includes(certificate.status) ? certificate.status : 'draft';
+
+  return {
+    id: certificate.id ?? `local-${Date.now()}`,
+    studentId: certificate.studentId ?? student?.id ?? null,
+    studentName: certificate.studentName || student?.name || 'Unknown Student',
+    classCode: certificate.classCode || student?.class || '',
+    section: certificate.section || student?.section || '',
+    shift: certificate.shift || student?.shift || '',
+    studentEmail: certificate.studentEmail || student?.email || makeStudentEmail(certificate.studentName || student?.name),
+    certificateType: certificate.certificateType || 'Achievement',
+    issueDate: certificate.issueDate || '',
+    status,
+    grade: certificate.grade || '-',
+    description: certificate.description || '',
+    createdAt: certificate.createdAt || new Date().toISOString(),
+  };
+};
+
+function createDownloadBlob(certificate) {
+  const lines = [
+    'Class Management System',
+    'Student Certificate',
+    '',
+    `Student: ${certificate.studentName}`,
+    `Class: ${certificate.classCode || '-'}  Section: ${certificate.section || '-'}  Shift: ${certificate.shift || '-'}`,
+    `Type: ${certificate.certificateType}`,
+    `Grade: ${certificate.grade}`,
+    `Status: ${certificate.status}`,
+    `Issue Date: ${certificate.issueDate || '-'}`,
+    '',
+    'Description:',
+    certificate.description || '-',
+  ];
+
+  return new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+}
+
 export default function CertificatesPage() {
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('issued');
+  const [students, setStudents] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
-  const [certificates, setCertificates] = useState(initialCertificates);
+  const [certificates, setCertificates] = useState([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [notification, setNotification] = useState(null);
   const [formData, setFormData] = useState({
-    studentName: '',
+    studentId: '',
     certificateType: 'Achievement',
     grade: 'A',
     description: '',
     status: 'draft',
   });
 
-  const clearNotification = () => {
-    setTimeout(() => setNotification(null), 2500);
+  const notify = (type, message) => {
+    setNotification({ type, message });
+    setTimeout(() => setNotification(null), 2800);
   };
 
-  const issueCertificate = (id) => {
-    setCertificates((prev) =>
-      prev.map((c) => {
-        if (c.id !== id) return c;
-        return {
-          ...c,
-          status: 'issued',
-          issueDate: c.issueDate || format(new Date(), 'yyyy-MM-dd'),
-        };
-      })
-    );
-    setNotification({ type: 'success', message: 'Certificate issued successfully.' });
-    clearNotification();
-  };
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
 
-  const issueAllPending = () => {
-    setCertificates((prev) =>
-      prev.map((c) => {
-        if (c.status !== 'pending') return c;
-        return {
-          ...c,
-          status: 'issued',
-          issueDate: c.issueDate || format(new Date(), 'yyyy-MM-dd'),
-        };
-      })
-    );
-    setNotification({ type: 'success', message: 'All pending certificates have been issued.' });
-    clearNotification();
-  };
+      const localStudents = readLocalList(LOCAL_STUDENTS_KEY).map(normalizeStudent);
+      let mergedStudents;
+      try {
+        const response = await studentsAPI.getAll();
+        const apiStudents = Array.isArray(response?.data) ? response.data : [];
+        mergedStudents = mergeUniqueById([...localStudents, ...(apiStudents.length > 0 ? apiStudents : studentsData)]);
+      } catch {
+        mergedStudents = mergeUniqueById([...localStudents, ...studentsData]);
+      }
 
-  const handleCreate = (e) => {
-    e.preventDefault();
-    const studentName = formData.studentName.trim();
-    const description = formData.description.trim();
-    if (!studentName || !description) return;
+      const normalizedStudents = mergedStudents.map(normalizeStudent);
+      setStudents(normalizedStudents);
 
-    const newCertificate = {
-      id: Date.now(),
-      studentName,
-      certificateType: formData.certificateType,
-      issueDate: formData.status === 'issued' ? format(new Date(), 'yyyy-MM-dd') : '',
-      status: formData.status,
-      grade: formData.grade,
-      description,
+      const studentsById = new Map(normalizedStudents.map((s) => [String(s.id), s]));
+      const localCertificates = readLocalList(LOCAL_CERTIFICATES_KEY)
+        .map((item) => normalizeCertificate(item, studentsById));
+
+      try {
+        const response = await certificatesAPI.getAll();
+        const apiCertificates = (Array.isArray(response?.data) ? response.data : [])
+          .map((item) => normalizeCertificate(item, studentsById));
+        const merged = mergeUniqueById([...apiCertificates, ...localCertificates]);
+        setCertificates(merged);
+      } catch {
+        setCertificates(localCertificates);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    setCertificates((prev) => [newCertificate, ...prev]);
-    setShowCreateModal(false);
-    setFormData({
-      studentName: '',
-      certificateType: 'Achievement',
-      grade: 'A',
-      description: '',
-      status: 'draft',
-    });
-    setNotification({ type: 'success', message: 'Certificate created successfully.' });
-    clearNotification();
+    loadData();
+  }, []);
+
+  const persistCertificates = (nextCertificates) => {
+    setCertificates(nextCertificates);
+    saveLocalCertificates(nextCertificates);
   };
+
+  const certificateTemplates = useMemo(
+    () => CERTIFICATE_TYPES.map((type, index) => ({
+      id: index + 1,
+      name: `${type} Certificate`,
+      preview: type
+        .split(' ')
+        .map((part) => part.charAt(0))
+        .join('')
+        .slice(0, 2)
+        .toUpperCase(),
+      students: certificates.filter((c) => c.certificateType === type).length,
+      type,
+    })),
+    [certificates]
+  );
 
   const stats = useMemo(() => {
     const issued = certificates.filter((c) => c.status === 'issued').length;
@@ -158,11 +199,204 @@ export default function CertificatesPage() {
     };
   }, [certificates]);
 
+  const filteredCertificates = useMemo(() => {
+    const base = certificates.filter((c) => c.status === activeTab);
+    if (!selectedTemplate) return base;
+    return base.filter((c) => c.certificateType === selectedTemplate.type);
+  }, [activeTab, certificates, selectedTemplate]);
+
+  const selectedStudent = useMemo(
+    () => students.find((student) => String(student.id) === String(formData.studentId)) || null,
+    [formData.studentId, students]
+  );
+
+  const issueCertificate = async (id) => {
+    const target = certificates.find((certificate) => String(certificate.id) === String(id));
+    if (!target) return;
+
+    const next = certificates.map((certificate) => {
+      if (String(certificate.id) !== String(id)) return certificate;
+      return {
+        ...certificate,
+        status: 'issued',
+        issueDate: certificate.issueDate || format(new Date(), 'yyyy-MM-dd'),
+      };
+    });
+
+    persistCertificates(next);
+
+    try {
+      await certificatesAPI.issue(id);
+      notify('success', `Certificate issued for ${target.studentName}.`);
+    } catch {
+      try {
+        const updated = next.find((certificate) => String(certificate.id) === String(id));
+        await certificatesAPI.update(id, updated);
+        notify('success', `Certificate issued for ${target.studentName}.`);
+      } catch {
+        notify('success', `Certificate issued locally for ${target.studentName} (API unavailable).`);
+      }
+    }
+  };
+
+  const issueAllPending = async () => {
+    const pendingCertificates = certificates.filter((c) => c.status === 'pending');
+    if (pendingCertificates.length === 0) {
+      notify('error', 'No pending certificates found.');
+      return;
+    }
+
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const next = certificates.map((certificate) =>
+      certificate.status === 'pending'
+        ? { ...certificate, status: 'issued', issueDate: certificate.issueDate || today }
+        : certificate
+    );
+
+    persistCertificates(next);
+
+    try {
+      await Promise.all(
+        pendingCertificates.map((certificate) =>
+          certificatesAPI.issue(certificate.id).catch(() => certificatesAPI.update(certificate.id, {
+            ...certificate,
+            status: 'issued',
+            issueDate: certificate.issueDate || today,
+          }))
+        )
+      );
+      notify('success', 'All pending certificates have been issued.');
+    } catch {
+      notify('success', 'Pending certificates issued locally (API unavailable).');
+    }
+  };
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    const description = formData.description.trim();
+
+    if (!selectedStudent) {
+      notify('error', 'Please select a student.');
+      return;
+    }
+
+    if (!description) {
+      notify('error', 'Description is required.');
+      return;
+    }
+
+    setIsSaving(true);
+
+    const payload = {
+      id: `local-${Date.now()}`,
+      studentId: selectedStudent.id,
+      studentName: selectedStudent.name,
+      classCode: selectedStudent.class,
+      section: selectedStudent.section,
+      shift: selectedStudent.shift,
+      studentEmail: selectedStudent.email,
+      certificateType: formData.certificateType,
+      issueDate: formData.status === 'issued' ? format(new Date(), 'yyyy-MM-dd') : '',
+      status: formData.status,
+      grade: formData.grade.trim() || '-',
+      description,
+      createdAt: new Date().toISOString(),
+    };
+
+    try {
+      const response = await certificatesAPI.create(payload);
+      const created = response?.data && typeof response.data === 'object' ? response.data : payload;
+      const normalized = normalizeCertificate(created, new Map(students.map((s) => [String(s.id), s])));
+      persistCertificates([normalized, ...certificates]);
+      notify('success', 'Certificate created successfully.');
+    } catch {
+      persistCertificates([payload, ...certificates]);
+      notify('success', 'Certificate created locally (API unavailable).');
+    } finally {
+      setIsSaving(false);
+      setShowCreateModal(false);
+      setFormData({
+        studentId: '',
+        certificateType: 'Achievement',
+        grade: 'A',
+        description: '',
+        status: 'draft',
+      });
+    }
+  };
+
+  const downloadCertificate = async (certificate) => {
+    try {
+      const response = await certificatesAPI.download(certificate.id);
+      if (response?.data instanceof Blob) {
+        const url = window.URL.createObjectURL(response.data);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `certificate-${certificate.studentName.replace(/\s+/g, '-').toLowerCase()}.pdf`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+        notify('success', `Downloaded certificate for ${certificate.studentName}.`);
+        return;
+      }
+    } catch {
+      // Fallback to local download below.
+    }
+
+    const blob = createDownloadBlob(certificate);
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `certificate-${certificate.studentName.replace(/\s+/g, '-').toLowerCase()}.txt`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    notify('success', `Downloaded local certificate file for ${certificate.studentName}.`);
+  };
+
+  const sendCertificateEmail = async (certificate) => {
+    try {
+      await certificatesAPI.sendEmail(certificate.id);
+      notify('success', `Email sent for ${certificate.studentName}.`);
+      return;
+    } catch {
+      const subject = encodeURIComponent(`Certificate: ${certificate.certificateType}`);
+      const body = encodeURIComponent(
+        `Hello ${certificate.studentName},\n\nYour ${certificate.certificateType} certificate is ready.\nGrade: ${certificate.grade}\nStatus: ${certificate.status}\nIssue Date: ${certificate.issueDate || '-'}\n\nRegards,\nClass Management`
+      );
+      const targetEmail = certificate.studentEmail || makeStudentEmail(certificate.studentName);
+      window.location.href = `mailto:${targetEmail}?subject=${subject}&body=${body}`;
+      notify('success', `Opened email draft for ${certificate.studentName}.`);
+    }
+  };
+
+  const deleteCertificate = async (id) => {
+    const certificate = certificates.find((item) => String(item.id) === String(id));
+    if (!certificate) return;
+    if (!window.confirm(`Delete certificate for ${certificate.studentName}?`)) return;
+
+    const next = certificates.filter((item) => String(item.id) !== String(id));
+    persistCertificates(next);
+
+    try {
+      await certificatesAPI.delete(id);
+      notify('success', `Deleted certificate for ${certificate.studentName}.`);
+    } catch {
+      notify('success', `Deleted locally for ${certificate.studentName} (API unavailable).`);
+    }
+  };
+
   const columns = [
     {
       header: 'Student',
       accessor: 'studentName',
       sortable: true,
+      render: (value, row) => (
+        <div>
+          <p className="font-medium text-gray-800">{value}</p>
+          <p className="text-xs text-gray-400">
+            {row.classCode || '-'} | {row.section || '-'} | {row.shift || '-'}
+          </p>
+        </div>
+      ),
     },
     {
       header: 'Certificate Type',
@@ -178,14 +412,17 @@ export default function CertificatesPage() {
     {
       header: 'Grade',
       accessor: 'grade',
+      sortable: true,
     },
     {
       header: 'Description',
       accessor: 'description',
+      render: (value) => <span className="line-clamp-2">{value || '-'}</span>,
     },
     {
       header: 'Status',
       accessor: 'status',
+      sortable: true,
       render: (value) => (
         <Badge variant={statusColors[value] || 'neutral'}>
           {value.charAt(0).toUpperCase() + value.slice(1)}
@@ -201,10 +438,7 @@ export default function CertificatesPage() {
             variant="ghost"
             size="sm"
             icon={HiOutlineDocumentDownload}
-            onClick={() => {
-              setNotification({ type: 'success', message: `Prepared PDF for ${row.studentName}.` });
-              clearNotification();
-            }}
+            onClick={() => downloadCertificate(row)}
           >
             PDF
           </Button>
@@ -212,10 +446,7 @@ export default function CertificatesPage() {
             variant="ghost"
             size="sm"
             icon={HiOutlineMail}
-            onClick={() => {
-              setNotification({ type: 'success', message: `Email queued for ${row.studentName}.` });
-              clearNotification();
-            }}
+            onClick={() => sendCertificateEmail(row)}
           >
             Email
           </Button>
@@ -224,12 +455,18 @@ export default function CertificatesPage() {
               Issue
             </Button>
           )}
+          <Button
+            variant="danger"
+            size="sm"
+            icon={HiOutlineTrash}
+            onClick={() => deleteCertificate(value)}
+          >
+            Delete
+          </Button>
         </div>
       ),
     },
   ];
-
-  const filteredCertificates = certificates.filter((c) => c.status === activeTab);
 
   return (
     <div className="space-y-6">
@@ -249,7 +486,7 @@ export default function CertificatesPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Certificates</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Manage and issue student certificates
+            Real certificate workflow with student records, issuing, download, and email.
           </p>
         </div>
         <Button
@@ -266,7 +503,7 @@ export default function CertificatesPage() {
         <div className="bg-white rounded-xl p-5 shadow-card">
           <p className="text-sm text-gray-500">Total</p>
           <p className="text-2xl font-bold text-gray-800 mt-1">{stats.total}</p>
-          <span className="text-xs text-green-600 mt-2 block">Up 12% this month</span>
+          <span className="text-xs text-gray-500 mt-2 block">All certificates</span>
         </div>
         <div className="bg-white rounded-xl p-5 shadow-card">
           <p className="text-sm text-gray-500">Issued</p>
@@ -281,29 +518,28 @@ export default function CertificatesPage() {
         <div className="bg-white rounded-xl p-5 shadow-card">
           <p className="text-sm text-gray-500">Draft</p>
           <p className="text-2xl font-bold text-blue-600 mt-1">{stats.draft}</p>
-          <span className="text-xs text-green-600 mt-2 block">Up 8% this month</span>
+          <span className="text-xs text-gray-500 mt-2 block">Not issued yet</span>
         </div>
       </div>
 
       <div className="bg-white rounded-xl shadow-card p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-800">Certificate Templates</h2>
-          <Button variant="secondary" size="sm" icon={HiOutlinePlus}>
-            New Template
-          </Button>
+          {selectedTemplate ? (
+            <Button variant="secondary" size="sm" onClick={() => setSelectedTemplate(null)}>
+              Clear Template Filter
+            </Button>
+          ) : null}
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-          {certificateTemplates.map((template, index) => (
-            <motion.div
+          {certificateTemplates.map((template) => (
+            <button
+              type="button"
               key={template.id}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: index * 0.05 }}
-              whileHover={{ y: -4 }}
               onClick={() => setSelectedTemplate(template)}
               className={`
-                bg-white border rounded-xl p-4 cursor-pointer transition-all
+                bg-white border rounded-xl p-4 cursor-pointer transition-all text-left
                 ${selectedTemplate?.id === template.id
                   ? 'border-primary-500 ring-2 ring-primary-200'
                   : 'border-gray-200 hover:border-primary-300'
@@ -315,16 +551,16 @@ export default function CertificatesPage() {
                 {template.name}
               </h3>
               <p className="text-xs text-gray-400">
-                {template.students} issued
+                {template.students} records
               </p>
-            </motion.div>
+            </button>
           ))}
         </div>
       </div>
 
       <div className="border-b border-gray-200">
         <nav className="flex gap-6">
-          {['issued', 'pending', 'draft'].map((tab) => (
+          {CERTIFICATE_STATUSES.map((tab) => (
             <button
               key={tab}
               type="button"
@@ -349,6 +585,7 @@ export default function CertificatesPage() {
       <DataTable
         columns={columns}
         data={filteredCertificates}
+        loading={loading}
         searchable={true}
         filterable={false}
         exportable={true}
@@ -384,27 +621,28 @@ export default function CertificatesPage() {
 
       <Modal
         isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
+        onClose={() => !isSaving && setShowCreateModal(false)}
         title="Create Certificate"
       >
         <form onSubmit={handleCreate} className="space-y-4">
           <div>
             <label htmlFor="cert-student" className="block text-sm font-medium text-gray-700 mb-1">
-              Student Name
+              Student
             </label>
-            <input
+            <select
               id="cert-student"
-              value={formData.studentName}
-              list="student-options"
-              onChange={(e) => setFormData((prev) => ({ ...prev, studentName: e.target.value }))}
+              value={formData.studentId}
+              onChange={(e) => setFormData((prev) => ({ ...prev, studentId: e.target.value }))}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               required
-            />
-            <datalist id="student-options">
-              {studentsData.map((student) => (
-                <option key={student.id} value={student.name} />
+            >
+              <option value="">Select student</option>
+              {students.map((student) => (
+                <option key={student.id} value={student.id}>
+                  {student.name} - {student.class} {student.section} ({student.shift})
+                </option>
               ))}
-            </datalist>
+            </select>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -418,10 +656,9 @@ export default function CertificatesPage() {
                 onChange={(e) => setFormData((prev) => ({ ...prev, certificateType: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
-                <option value="Achievement">Achievement</option>
-                <option value="Participation">Participation</option>
-                <option value="Merit">Merit</option>
-                <option value="Completion">Completion</option>
+                {CERTIFICATE_TYPES.map((type) => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
               </select>
             </div>
             <div>
@@ -468,10 +705,10 @@ export default function CertificatesPage() {
           </div>
 
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" onClick={() => setShowCreateModal(false)}>
+            <Button type="button" variant="secondary" onClick={() => setShowCreateModal(false)} disabled={isSaving}>
               Cancel
             </Button>
-            <Button type="submit">Create</Button>
+            <Button type="submit" loading={isSaving}>Create</Button>
           </div>
         </form>
       </Modal>

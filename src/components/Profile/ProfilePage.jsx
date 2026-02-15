@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 
+import { ACCOUNT_ROLES, ROLE_CAPABILITIES, ROLE_LABELS, normalizeRole } from '../../constants/roles';
 import { useAuth } from '../../context/AuthContext';
 import Avatar from '../common/Avatar';
 import Button from '../common/Button';
@@ -21,6 +22,8 @@ export default function ProfilePage() {
   const avatar = textValue('avatar').trim();
   const profileSeed = valueFor('email') || valueFor('name') || 'user';
   const previewAvatar = avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profileSeed}`;
+  const currentRole = normalizeRole(valueFor('role') || user?.role);
+  const roleCapabilities = ROLE_CAPABILITIES[currentRole] || [];
 
   const onChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -61,7 +64,7 @@ export default function ProfilePage() {
       const result = await updateProfile({
         name: textValue('name').trim(),
         email: textValue('email').trim(),
-        role: textValue('role').trim() || 'Teacher',
+        role: normalizeRole(valueFor('role')),
         phone: textValue('phone').trim(),
         avatar: textValue('avatar').trim(),
       });
@@ -98,6 +101,17 @@ export default function ProfilePage() {
         <p className="text-sm text-gray-500 mt-1">
           Update your own account information.
         </p>
+      </div>
+
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
+        <h2 className="text-sm font-semibold text-blue-800">
+          {ROLE_LABELS[currentRole]} Account Capabilities
+        </h2>
+        <ul className="mt-2 space-y-1 text-sm text-blue-700">
+          {roleCapabilities.map((capability) => (
+            <li key={capability}>• {capability}</li>
+          ))}
+        </ul>
       </div>
 
       <div className="bg-white rounded-xl shadow-card p-6">
@@ -144,13 +158,15 @@ export default function ProfilePage() {
               <label htmlFor="profile-role" className="block text-sm font-medium text-gray-700 mb-1">
                 Role
               </label>
-              <input
+              <select
                 id="profile-role"
-                type="text"
-                value={textValue('role')}
+                value={normalizeRole(valueFor('role'))}
                 onChange={(e) => onChange('role', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-              />
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+              >
+                <option value={ACCOUNT_ROLES.STUDENT}>{ROLE_LABELS[ACCOUNT_ROLES.STUDENT]}</option>
+                <option value={ACCOUNT_ROLES.TEACHER}>{ROLE_LABELS[ACCOUNT_ROLES.TEACHER]}</option>
+              </select>
             </div>
             <div>
               <label htmlFor="profile-phone" className="block text-sm font-medium text-gray-700 mb-1">

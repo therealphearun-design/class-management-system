@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useReducer, useCallback } from 'react';
 
+import { ACCOUNT_ROLES, getRoleLabel, normalizeRole } from '../constants/roles';
+
 const AuthContext = createContext(null);
 
 const initialState = {
@@ -34,10 +36,20 @@ function authReducer(state, action) {
   }
 }
 
+function normalizeUser(user) {
+  if (!user) return user;
+  const normalizedRole = normalizeRole(user.role);
+  return {
+    ...user,
+    role: normalizedRole,
+    roleLabel: getRoleLabel(normalizedRole),
+  };
+}
+
 export function AuthProvider({ children }) {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
-  const login = useCallback(async (email, password) => {
+  const login = useCallback(async (email, password, selectedRole = ACCOUNT_ROLES.TEACHER) => {
     dispatch({ type: 'LOGIN_START' });
     try {
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -49,11 +61,13 @@ export function AuthProvider({ children }) {
           .filter(Boolean)
           .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
           .join(' ');
+        const normalizedRole = normalizeRole(selectedRole);
         const user = {
           id: 1,
           name: formattedName || 'User',
           email,
-          role: 'Teacher',
+          role: normalizedRole,
+          roleLabel: getRoleLabel(normalizedRole),
           phone: '',
           avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`,
         };
@@ -83,7 +97,9 @@ export function AuthProvider({ children }) {
       const token = localStorage.getItem('auth_token');
       
       if (storedUser && token) {
-        dispatch({ type: 'LOGIN_SUCCESS', payload: JSON.parse(storedUser) });
+        const normalizedUser = normalizeUser(JSON.parse(storedUser));
+        dispatch({ type: 'LOGIN_SUCCESS', payload: normalizedUser });
+        localStorage.setItem('auth_user', JSON.stringify(normalizedUser));
       } else {
         dispatch({ type: 'SET_LOADING', payload: false });
       }
@@ -101,6 +117,9 @@ export function AuthProvider({ children }) {
       ...state.user,
       ...updates,
     };
+    const normalizedRole = normalizeRole(nextUser.role);
+    nextUser.role = normalizedRole;
+    nextUser.roleLabel = getRoleLabel(normalizedRole);
 
     if (!nextUser.avatar) {
       const avatarSeed = nextUser.email || nextUser.name || 'user';

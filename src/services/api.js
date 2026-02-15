@@ -106,6 +106,17 @@ export const marksheetsAPI = {
   download: (id) => api.get(`/marksheets/${id}/download`, { responseType: 'blob' }),
 };
 
+export const certificatesAPI = {
+  getAll: (params) => api.get('/certificates', { params }),
+  getById: (id) => api.get(`/certificates/${id}`),
+  create: (data) => api.post('/certificates', data),
+  update: (id, data) => api.put(`/certificates/${id}`, data),
+  delete: (id) => api.delete(`/certificates/${id}`),
+  issue: (id) => api.post(`/certificates/${id}/issue`),
+  download: (id) => api.get(`/certificates/${id}/download`, { responseType: 'blob' }),
+  sendEmail: (id) => api.post(`/certificates/${id}/email`),
+};
+
 export const reportsAPI = {
   getAttendanceReport: (params) => api.get('/reports/attendance', { params }),
   getPerformanceReport: (params) => api.get('/reports/performance', { params }),

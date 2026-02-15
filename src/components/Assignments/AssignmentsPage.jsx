@@ -3,110 +3,44 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import {
   HiOutlineDocumentText,
-  HiOutlineMinusCircle,
   HiOutlinePencil,
   HiOutlinePlus,
-  HiOutlinePlusCircle,
   HiOutlineSearch,
+  HiOutlineCheckCircle,
   HiOutlineTrash,
 } from 'react-icons/hi';
 
+import { ACCOUNT_ROLES, normalizeRole } from '../../constants/roles';
+import { useAuth } from '../../context/AuthContext';
 import { classOptions, sectionOptions, shiftOptions, studentsData, subjectOptions } from '../../data/students';
-import { assignmentsAPI } from '../../services/api';
+import { assignmentsAPI, studentsAPI } from '../../services/api';
 import Badge from '../common/Badge';
 import Button from '../common/Button';
 import Modal from '../common/Modal';
 
 const LOCAL_ASSIGNMENTS_KEY = 'assignments_local_v2';
+const LOCAL_STUDENTS_KEY = 'students_local_v2';
+const LOCAL_ASSIGNMENT_SUBMISSIONS_KEY = 'assignment_submissions_local_v1';
+const LOCAL_ASSIGNMENT_ANNOUNCEMENTS_KEY = 'assignment_announcements_local_v1';
+const LOCAL_ASSIGNMENT_SEEN_KEY = 'assignment_seen_by_student_v1';
 
-const seedAssignments = [
-  {
-    id: 1,
-    title: 'Algebra Problem Set',
-    subject: 'Mathematics',
-    dueDate: '2026-03-15',
-    status: 'active',
-    submissions: 28,
-    total: 30,
-    classCode: '10A',
-    section: 'A',
-    shift: 'Morning',
-    description: '',
-  },
-  {
-    id: 2,
-    title: 'Lab Report: Photosynthesis',
-    subject: 'Science',
-    dueDate: '2026-03-12',
-    status: 'active',
-    submissions: 22,
-    total: 30,
-    classCode: '11C',
-    section: 'C',
-    shift: 'Afternoon',
-    description: '',
-  },
-  {
-    id: 3,
-    title: 'Essay: Climate Change',
-    subject: 'English',
-    dueDate: '2026-02-10',
-    status: 'completed',
-    submissions: 30,
-    total: 30,
-    classCode: '9B',
-    section: 'B',
-    shift: 'Afternoon',
-    description: '',
-  },
-  {
-    id: 4,
-    title: 'World War II Research',
-    subject: 'History',
-    dueDate: '2026-02-08',
-    status: 'completed',
-    submissions: 30,
-    total: 30,
-    classCode: '10D',
-    section: 'D',
-    shift: 'Morning',
-    description: '',
-  },
-  {
-    id: 5,
-    title: 'Python Basics Project',
-    subject: 'Computer Science',
-    dueDate: '2026-03-20',
-    status: 'active',
-    submissions: 15,
-    total: 30,
-    classCode: '12A',
-    section: 'A',
-    shift: 'Afternoon',
-    description: '',
-  },
-  {
-    id: 6,
-    title: 'Geometry Worksheet',
-    subject: 'Mathematics',
-    dueDate: '2026-03-18',
-    status: 'draft',
-    submissions: 0,
-    total: 30,
-    classCode: '9A',
-    section: 'A',
-    shift: 'Morning',
-    description: '',
-  },
-];
-
-const readLocalAssignments = () => {
+const readLocalData = (key) => {
   try {
-    const raw = localStorage.getItem(LOCAL_ASSIGNMENTS_KEY);
+    const raw = localStorage.getItem(key);
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
+  }
+};
+
+const readLocalObject = (key) => {
+  try {
+    const raw = localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
   }
 };
 
@@ -118,38 +52,67 @@ const saveLocalAssignments = (items) => {
   }
 };
 
-const normalizeAssignment = (assignment) => ({
-  id: assignment.id ?? `local-${Date.now()}`,
-  title: assignment.title || 'Untitled Assignment',
-  subject: assignment.subject || 'Mathematics',
-  dueDate: assignment.dueDate || '',
-  status: assignment.status || 'active',
-  submissions: Math.max(0, Number(assignment.submissions) || 0),
-  total: Math.max(1, Number(assignment.total) || 30),
-  classCode: assignment.classCode || assignment.class || '10A',
-  section: assignment.section || 'A',
-  shift: assignment.shift || 'Morning',
-  description: assignment.description || '',
+const normalizeStudent = (student) => ({
+  ...student,
+  section: student.section || 'A',
+  shift: student.shift || 'Morning',
 });
 
-const getStudentCountForGroup = (classCode, section, shift) => {
-  const count = studentsData.filter(
-    (student) =>
-      student.class === classCode &&
-      student.section === section &&
-      student.shift === shift
-  ).length;
-  return count || 30;
+const mergeUniqueById = (items) => {
+  const map = new Map();
+  items.forEach((item) => map.set(String(item.id), item));
+  return Array.from(map.values());
+};
+
+const normalizeAssignment = (assignment) => {
+  const total = Math.max(1, Number(assignment.total) || 1);
+  const rawStatus = String(assignment.status || 'active').toLowerCase();
+  const status = rawStatus === 'draft' ? 'draft' : 'active';
+  const submissions = status === 'draft' ? 0 : Math.min(total, Math.max(0, Number(assignment.submissions) || 0));
+
+  return {
+    id: assignment.id ?? `local-${Date.now()}`,
+    title: assignment.title || 'Untitled Assignment',
+    subject: assignment.subject || 'Mathematics',
+    dueDate: assignment.dueDate || '',
+    status,
+    submissions,
+    total,
+    classCode: assignment.classCode || assignment.class || '10A',
+    section: assignment.section || 'A',
+    shift: assignment.shift || 'Morning',
+    description: assignment.description || '',
+  };
+};
+
+const getDerivedStatus = (assignment) => {
+  if (assignment.status === 'draft') return 'draft';
+  if (assignment.submissions >= assignment.total) return 'completed';
+  if (assignment.dueDate) {
+    const due = new Date(assignment.dueDate);
+    const today = new Date();
+    due.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+    if (!Number.isNaN(due.getTime()) && due < today) return 'overdue';
+  }
+  return 'active';
 };
 
 export default function AssignmentsPage() {
+  const { user } = useAuth();
+  const role = normalizeRole(user?.role);
+  const isTeacher = role === ACCOUNT_ROLES.TEACHER;
+  const currentStudentKey = String(user?.email || user?.id || user?.name || 'student');
+
   const [assignments, setAssignments] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [studentSubmissions, setStudentSubmissions] = useState({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [classFilter, setClassFilter] = useState('all');
   const [shiftFilter, setShiftFilter] = useState('all');
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAssignmentId, setEditingAssignmentId] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [notification, setNotification] = useState(null);
@@ -157,7 +120,7 @@ export default function AssignmentsPage() {
     title: '',
     subject: subjectOptions.find((opt) => opt.value === 'mathematics')?.label || 'Mathematics',
     dueDate: '',
-    total: 30,
+    submissions: 0,
     status: 'active',
     classCode: '10A',
     section: 'A',
@@ -165,34 +128,122 @@ export default function AssignmentsPage() {
     description: '',
   });
 
+  const loadAssignmentsFromLocal = () => readLocalData(LOCAL_ASSIGNMENTS_KEY).map(normalizeAssignment);
+
+  const getStudentCountForGroup = (classCode, section, shift) => {
+    const count = students.filter(
+      (student) => student.class === classCode && student.section === section && student.shift === shift
+    ).length;
+    return count || 0;
+  };
+
   useEffect(() => {
-    const loadAssignments = async () => {
+    const loadData = async () => {
       setLoading(true);
-      const localData = readLocalAssignments().map(normalizeAssignment);
+      const submissionMap = readLocalObject(LOCAL_ASSIGNMENT_SUBMISSIONS_KEY);
+      setStudentSubmissions(submissionMap);
+
+      const localStudents = readLocalData(LOCAL_STUDENTS_KEY).map(normalizeStudent);
+      let mergedStudents;
+      try {
+        const response = await studentsAPI.getAll();
+        const apiStudents = Array.isArray(response?.data) ? response.data : [];
+        mergedStudents = mergeUniqueById([...localStudents, ...(apiStudents.length > 0 ? apiStudents : studentsData)]);
+      } catch {
+        mergedStudents = mergeUniqueById([...localStudents, ...studentsData]);
+      }
+      setStudents(mergedStudents.map(normalizeStudent));
+
+      const localAssignments = loadAssignmentsFromLocal();
       try {
         const response = await assignmentsAPI.getAll();
-        const apiData = (Array.isArray(response?.data) ? response.data : []).map(normalizeAssignment);
-        const base = apiData.length > 0 ? apiData : seedAssignments.map(normalizeAssignment);
-        const merged = [...localData, ...base.filter((item) => !localData.some((local) => String(local.id) === String(item.id)))];
+        const apiAssignments = (Array.isArray(response?.data) ? response.data : []).map(normalizeAssignment);
+        const merged = mergeUniqueById([...apiAssignments, ...localAssignments]);
         setAssignments(merged);
-      } catch (_error) {
-        const base = seedAssignments.map(normalizeAssignment);
-        const merged = [...localData, ...base.filter((item) => !localData.some((local) => String(local.id) === String(item.id)))];
-        setAssignments(merged);
+      } catch {
+        setAssignments(localAssignments);
       } finally {
         setLoading(false);
       }
     };
 
-    loadAssignments();
+    loadData();
   }, []);
+
+  useEffect(() => {
+    if (isTeacher) return;
+
+    const seenByStudent = readLocalObject(LOCAL_ASSIGNMENT_SEEN_KEY);
+    const seenForCurrent = Array.isArray(seenByStudent[currentStudentKey]) ? seenByStudent[currentStudentKey] : [];
+    const announcements = readLocalData(LOCAL_ASSIGNMENT_ANNOUNCEMENTS_KEY);
+    const unseen = announcements.filter((item) => !seenForCurrent.includes(String(item.id)));
+
+    if (unseen.length > 0) {
+      const latest = unseen[0];
+      setNotification({
+        type: 'success',
+        message: unseen.length === 1
+          ? `New assignment: ${latest.title}`
+          : `${unseen.length} new assignments have been posted.`,
+      });
+      setTimeout(() => setNotification(null), 3500);
+
+      const nextSeen = {
+        ...seenByStudent,
+        [currentStudentKey]: [...new Set([...seenForCurrent, ...unseen.map((item) => String(item.id))])],
+      };
+      try {
+        localStorage.setItem(LOCAL_ASSIGNMENT_SEEN_KEY, JSON.stringify(nextSeen));
+      } catch {
+        // Ignore storage errors.
+      }
+    }
+
+    const onStorage = (event) => {
+      if (event.key === LOCAL_ASSIGNMENTS_KEY) {
+        setAssignments(loadAssignmentsFromLocal());
+      }
+
+      if (event.key === LOCAL_ASSIGNMENT_ANNOUNCEMENTS_KEY) {
+        const latestAnnouncements = readLocalData(LOCAL_ASSIGNMENT_ANNOUNCEMENTS_KEY);
+        const latestSeen = readLocalObject(LOCAL_ASSIGNMENT_SEEN_KEY);
+        const currentSeen = Array.isArray(latestSeen[currentStudentKey]) ? latestSeen[currentStudentKey] : [];
+        const latestUnseen = latestAnnouncements.filter((item) => !currentSeen.includes(String(item.id)));
+        if (latestUnseen.length > 0) {
+          setNotification({ type: 'success', message: `New assignment: ${latestUnseen[0].title}` });
+          setTimeout(() => setNotification(null), 3500);
+          const updatedSeen = {
+            ...latestSeen,
+            [currentStudentKey]: [...new Set([...currentSeen, ...latestUnseen.map((item) => String(item.id))])],
+          };
+          try {
+            localStorage.setItem(LOCAL_ASSIGNMENT_SEEN_KEY, JSON.stringify(updatedSeen));
+          } catch {
+            // Ignore storage errors.
+          }
+        }
+      }
+    };
+
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [currentStudentKey, isTeacher]);
+
+  const persistSubmissions = (nextSubmissions) => {
+    setStudentSubmissions(nextSubmissions);
+    try {
+      localStorage.setItem(LOCAL_ASSIGNMENT_SUBMISSIONS_KEY, JSON.stringify(nextSubmissions));
+    } catch {
+      // Ignore storage errors for offline mode.
+    }
+  };
 
   const resetForm = () => {
     setFormData({
       title: '',
       subject: subjectOptions.find((opt) => opt.value === 'mathematics')?.label || 'Mathematics',
       dueDate: '',
-      total: getStudentCountForGroup('10A', 'A', 'Morning'),
+      submissions: 0,
       status: 'active',
       classCode: '10A',
       section: 'A',
@@ -204,7 +255,7 @@ export default function AssignmentsPage() {
   const openCreateModal = () => {
     setEditingAssignmentId(null);
     resetForm();
-    setIsCreateOpen(true);
+    setIsModalOpen(true);
   };
 
   const openEditModal = (assignment) => {
@@ -213,42 +264,50 @@ export default function AssignmentsPage() {
       title: assignment.title,
       subject: assignment.subject,
       dueDate: assignment.dueDate,
-      total: assignment.total,
+      submissions: assignment.submissions,
       status: assignment.status,
       classCode: assignment.classCode,
       section: assignment.section,
       shift: assignment.shift,
       description: assignment.description || '',
     });
-    setIsCreateOpen(true);
+    setIsModalOpen(true);
   };
 
   const filteredAssignments = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return assignments.filter((assignment) => {
-      const matchesSearch =
-        q.length === 0 ||
-        assignment.title.toLowerCase().includes(q) ||
-        assignment.subject.toLowerCase().includes(q) ||
-        assignment.classCode.toLowerCase().includes(q);
-      const matchesStatus =
-        statusFilter === 'all' || assignment.status === statusFilter;
-      const matchesClass = classFilter === 'all' || assignment.classCode === classFilter;
-      const matchesShift = shiftFilter === 'all' || assignment.shift === shiftFilter;
-      return matchesSearch && matchesStatus && matchesClass && matchesShift;
-    }).sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)));
+    return assignments
+      .filter((assignment) => {
+        const derivedStatus = getDerivedStatus(assignment);
+        const matchesSearch =
+          q.length === 0 ||
+          assignment.title.toLowerCase().includes(q) ||
+          assignment.subject.toLowerCase().includes(q) ||
+          assignment.classCode.toLowerCase().includes(q);
+        const matchesStatus = statusFilter === 'all' || derivedStatus === statusFilter;
+        const matchesClass = classFilter === 'all' || assignment.classCode === classFilter;
+        const matchesShift = shiftFilter === 'all' || assignment.shift === shiftFilter;
+        return matchesSearch && matchesStatus && matchesClass && matchesShift;
+      })
+      .sort((a, b) => {
+        const da = a.dueDate || '9999-12-31';
+        const db = b.dueDate || '9999-12-31';
+        if (da !== db) return da.localeCompare(db);
+        return String(a.title).localeCompare(String(b.title));
+      });
   }, [assignments, classFilter, search, shiftFilter, statusFilter]);
 
   const stats = useMemo(() => {
-    const filteredBase = assignments.filter((assignment) => {
+    const base = assignments.filter((assignment) => {
       const matchesClass = classFilter === 'all' || assignment.classCode === classFilter;
       const matchesShift = shiftFilter === 'all' || assignment.shift === shiftFilter;
       return matchesClass && matchesShift;
     });
-    const active = filteredBase.filter((a) => a.status === 'active').length;
-    const completed = filteredBase.filter((a) => a.status === 'completed').length;
-    const draft = filteredBase.filter((a) => a.status === 'draft').length;
-    return { total: filteredBase.length, active, completed, draft };
+    const active = base.filter((item) => getDerivedStatus(item) === 'active').length;
+    const overdue = base.filter((item) => getDerivedStatus(item) === 'overdue').length;
+    const completed = base.filter((item) => getDerivedStatus(item) === 'completed').length;
+    const draft = base.filter((item) => getDerivedStatus(item) === 'draft').length;
+    return { total: base.length, active, overdue, completed, draft };
   }, [assignments, classFilter, shiftFilter]);
 
   const persistAssignments = (nextAssignments) => {
@@ -256,78 +315,84 @@ export default function AssignmentsPage() {
     saveLocalAssignments(nextAssignments);
   };
 
-  const handleCreateOrUpdateAssignment = async (e) => {
-    e.preventDefault();
+  const pushAssignmentAnnouncement = (assignment) => {
+    const current = readLocalData(LOCAL_ASSIGNMENT_ANNOUNCEMENTS_KEY);
+    const next = [
+      {
+        id: assignment.id,
+        title: assignment.title,
+        classCode: assignment.classCode,
+        section: assignment.section,
+        shift: assignment.shift,
+        createdAt: new Date().toISOString(),
+      },
+      ...current.filter((item) => String(item.id) !== String(assignment.id)),
+    ].slice(0, 200);
+
+    try {
+      localStorage.setItem(LOCAL_ASSIGNMENT_ANNOUNCEMENTS_KEY, JSON.stringify(next));
+    } catch {
+      // Ignore storage errors.
+    }
+  };
+
+  const handleCreateOrUpdate = async (event) => {
+    event.preventDefault();
     if (!formData.title.trim() || !formData.dueDate) return;
 
-    setIsSaving(true);
-    const normalizedTotal = Math.max(1, Number(formData.total) || 1);
-    const nextStatus =
-      formData.status === 'draft'
-        ? 'draft'
-        : normalizedTotal > 0 && normalizedTotal <= Number(formData.total)
-        ? formData.status
-        : 'active';
+    const total = getStudentCountForGroup(formData.classCode, formData.section, formData.shift);
+    if (total <= 0) {
+      setNotification({
+        type: 'error',
+        message: 'No students found for the selected class, section, and shift.',
+      });
+      setTimeout(() => setNotification(null), 3000);
+      return;
+    }
 
-    const payload = {
+    setIsSaving(true);
+
+    const isDraft = formData.status === 'draft';
+    const submissions = isDraft ? 0 : Math.min(total, Math.max(0, Number(formData.submissions) || 0));
+    const payload = normalizeAssignment({
+      id: editingAssignmentId || `local-${Date.now()}`,
       title: formData.title.trim(),
       subject: formData.subject,
       dueDate: formData.dueDate,
-      total: normalizedTotal,
-      submissions: editingAssignmentId
-        ? Math.min(
-            assignments.find((item) => String(item.id) === String(editingAssignmentId))?.submissions || 0,
-            normalizedTotal
-          )
-        : 0,
-      status: nextStatus,
+      status: isDraft ? 'draft' : 'active',
+      submissions,
+      total,
       classCode: formData.classCode,
       section: formData.section,
       shift: formData.shift,
       description: formData.description.trim(),
-    };
+    });
 
     try {
       if (editingAssignmentId) {
         const response = await assignmentsAPI.update(editingAssignmentId, payload);
-        const updated = normalizeAssignment(
-          response?.data && typeof response.data === 'object'
-            ? response.data
-            : { ...payload, id: editingAssignmentId }
-        );
-        persistAssignments(
-          assignments.map((item) =>
-            String(item.id) === String(editingAssignmentId) ? updated : item
-          )
-        );
+        const updated = normalizeAssignment(response?.data && typeof response.data === 'object' ? response.data : payload);
+        persistAssignments(assignments.map((item) => (String(item.id) === String(editingAssignmentId) ? updated : item)));
         setNotification({ type: 'success', message: 'Assignment updated successfully.' });
       } else {
         const response = await assignmentsAPI.create(payload);
-        const created = normalizeAssignment(
-          response?.data && typeof response.data === 'object'
-            ? response.data
-            : { ...payload, id: `local-${Date.now()}` }
-        );
+        const created = normalizeAssignment(response?.data && typeof response.data === 'object' ? response.data : payload);
         persistAssignments([created, ...assignments]);
+        pushAssignmentAnnouncement(created);
         setNotification({ type: 'success', message: 'Assignment created successfully.' });
       }
-    } catch (_error) {
+    } catch {
       if (editingAssignmentId) {
-        const updated = normalizeAssignment({ ...payload, id: editingAssignmentId });
-        persistAssignments(
-          assignments.map((item) =>
-            String(item.id) === String(editingAssignmentId) ? updated : item
-          )
-        );
+        persistAssignments(assignments.map((item) => (String(item.id) === String(editingAssignmentId) ? payload : item)));
         setNotification({ type: 'success', message: 'Assignment updated locally (API unavailable).' });
       } else {
-        const created = normalizeAssignment({ ...payload, id: `local-${Date.now()}` });
-        persistAssignments([created, ...assignments]);
+        persistAssignments([payload, ...assignments]);
+        pushAssignmentAnnouncement(payload);
         setNotification({ type: 'success', message: 'Assignment created locally (API unavailable).' });
       }
     } finally {
       setIsSaving(false);
-      setIsCreateOpen(false);
+      setIsModalOpen(false);
       setEditingAssignmentId(null);
       resetForm();
       setTimeout(() => setNotification(null), 3000);
@@ -335,51 +400,58 @@ export default function AssignmentsPage() {
   };
 
   const handleDelete = async (assignmentId) => {
-    const confirmed = window.confirm('Delete this assignment?');
-    if (!confirmed) return;
-
+    if (!window.confirm('Delete this assignment?')) return;
     const nextAssignments = assignments.filter((item) => String(item.id) !== String(assignmentId));
+
     try {
       await assignmentsAPI.delete(assignmentId);
     } catch {
-      // Continue with local delete fallback.
+      // Keep local deletion if API unavailable.
     }
+
     persistAssignments(nextAssignments);
     setNotification({ type: 'success', message: 'Assignment deleted.' });
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const updateSubmissions = async (assignment, delta) => {
-    const nextSubmissions = Math.min(
-      assignment.total,
-      Math.max(0, Number(assignment.submissions) + delta)
-    );
-    const nextStatus =
-      assignment.status === 'draft' && nextSubmissions > 0
-        ? 'active'
-        : nextSubmissions >= assignment.total
-        ? 'completed'
-        : assignment.status === 'completed' && nextSubmissions < assignment.total
-        ? 'active'
-        : assignment.status;
+  const handleStudentSubmit = async (assignment) => {
+    const submissionKey = `${currentStudentKey}:${assignment.id}`;
+    if (studentSubmissions[submissionKey]) return;
 
-    const updated = {
-      ...assignment,
-      submissions: nextSubmissions,
-      status: nextStatus,
+    const submittedAt = new Date().toISOString();
+    const submissionPayload = {
+      student: currentStudentKey,
+      submittedAt,
     };
 
-    const nextAssignments = assignments.map((item) =>
-      String(item.id) === String(assignment.id) ? updated : item
-    );
+    try {
+      await assignmentsAPI.submit(assignment.id, submissionPayload);
+    } catch {
+      // Keep local submission even when API is unavailable.
+    }
+
+    const nextSubmissions = {
+      ...studentSubmissions,
+      [submissionKey]: submissionPayload,
+    };
+    persistSubmissions(nextSubmissions);
+
+    const nextAssignments = assignments.map((item) => {
+      if (String(item.id) !== String(assignment.id)) return item;
+      if (item.status === 'draft') return item;
+      return {
+        ...item,
+        submissions: Math.min(item.total, (Number(item.submissions) || 0) + 1),
+      };
+    });
     persistAssignments(nextAssignments);
 
-    try {
-      await assignmentsAPI.update(assignment.id, updated);
-    } catch {
-      // Keep local updates if API unavailable.
-    }
+    setNotification({ type: 'success', message: 'Assignment submitted successfully.' });
+    setTimeout(() => setNotification(null), 3000);
   };
+
+  const selectedGroupTotal = getStudentCountForGroup(formData.classCode, formData.section, formData.shift);
+  const showSubmissionField = formData.status !== 'draft';
 
   return (
     <div className="space-y-6">
@@ -398,14 +470,20 @@ export default function AssignmentsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Assignments</h1>
-          <p className="text-sm text-gray-500 mt-1">Manage assignments by class, shift, and submission progress.</p>
+          <p className="text-sm text-gray-500 mt-1">
+            {isTeacher
+              ? 'Real assignment workflow by class, section, and shift.'
+              : 'View and submit your assignments.'}
+          </p>
         </div>
-        <Button icon={HiOutlinePlus} onClick={openCreateModal}>
-          New Assignment
-        </Button>
+        {isTeacher && (
+          <Button icon={HiOutlinePlus} onClick={openCreateModal}>
+            New Assignment
+          </Button>
+        )}
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <div className="bg-white rounded-xl p-4 shadow-card text-center">
           <p className="text-2xl font-bold text-gray-800">{stats.total}</p>
           <p className="text-xs text-gray-500 mt-1">Total</p>
@@ -413,6 +491,10 @@ export default function AssignmentsPage() {
         <div className="bg-white rounded-xl p-4 shadow-card text-center border-b-4 border-blue-500">
           <p className="text-2xl font-bold text-blue-600">{stats.active}</p>
           <p className="text-xs text-gray-500 mt-1">Active</p>
+        </div>
+        <div className="bg-white rounded-xl p-4 shadow-card text-center border-b-4 border-orange-500">
+          <p className="text-2xl font-bold text-orange-600">{stats.overdue}</p>
+          <p className="text-xs text-gray-500 mt-1">Overdue</p>
         </div>
         <div className="bg-white rounded-xl p-4 shadow-card text-center border-b-4 border-green-500">
           <p className="text-2xl font-bold text-green-600">{stats.completed}</p>
@@ -463,7 +545,7 @@ export default function AssignmentsPage() {
         </div>
 
         <div className="flex gap-2 flex-wrap">
-          {['all', 'active', 'completed', 'draft'].map((status) => (
+          {['all', 'active', 'overdue', 'completed', 'draft'].map((status) => (
             <button
               key={status}
               type="button"
@@ -490,116 +572,125 @@ export default function AssignmentsPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredAssignments.map((assignment) => (
-            <div
-              key={assignment.id}
-              className="bg-white rounded-xl p-5 shadow-card hover:shadow-lg transition-all border border-transparent hover:border-primary-100"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="p-2 bg-primary-50 rounded-lg">
-                  <HiOutlineDocumentText className="w-5 h-5 text-primary-600" />
+          {filteredAssignments.map((assignment) => {
+            const status = getDerivedStatus(assignment);
+            const statusVariant =
+              status === 'completed'
+                ? 'info'
+                : status === 'overdue'
+                ? 'warning'
+                : status === 'active'
+                ? 'success'
+                : 'neutral';
+            const progress = assignment.total > 0 ? Math.min(100, (assignment.submissions / assignment.total) * 100) : 0;
+
+            return (
+              <div
+                key={assignment.id}
+                className="bg-white rounded-xl p-5 shadow-card hover:shadow-lg transition-all border border-transparent hover:border-primary-100"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="p-2 bg-primary-50 rounded-lg">
+                    <HiOutlineDocumentText className="w-5 h-5 text-primary-600" />
+                  </div>
+                  <Badge variant={statusVariant}>{status}</Badge>
                 </div>
-                <Badge
-                  variant={
-                    assignment.status === 'active'
-                      ? 'success'
-                      : assignment.status === 'completed'
-                      ? 'info'
-                      : 'neutral'
-                  }
-                >
-                  {assignment.status}
-                </Badge>
-              </div>
 
-              <h3 className="font-semibold text-gray-800 mb-1">{assignment.title}</h3>
-              <p className="text-xs text-gray-400 mb-3">{assignment.subject}</p>
-              <p className="text-xs text-gray-500 mb-3">
-                Class {assignment.classCode} | Section {assignment.section} | {assignment.shift}
-              </p>
-              {assignment.description ? (
-                <p className="text-xs text-gray-500 mb-3 line-clamp-2">{assignment.description}</p>
-              ) : null}
+                <h3 className="font-semibold text-gray-800 mb-1">{assignment.title}</h3>
+                <p className="text-xs text-gray-400 mb-3">{assignment.subject}</p>
+                <p className="text-xs text-gray-500 mb-3">
+                  Class {assignment.classCode} | Section {assignment.section} | {assignment.shift}
+                </p>
+                {assignment.description ? (
+                  <p className="text-xs text-gray-500 mb-3 line-clamp-2">{assignment.description}</p>
+                ) : null}
 
-              <div className="mb-3">
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="text-gray-500">Submissions</span>
-                  <span className="font-medium text-gray-700">
-                    {assignment.submissions}/{assignment.total}
+                <div className="mb-3">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-gray-500">Submissions</span>
+                    <span className="font-medium text-gray-700">
+                      {assignment.submissions}/{assignment.total}
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-100 rounded-full h-1.5">
+                    <div className="bg-primary-500 rounded-full h-1.5 transition-all" style={{ width: `${progress}%` }} />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-xs mb-3">
+                  <span className="text-gray-400">
+                    Due: {assignment.dueDate ? format(new Date(assignment.dueDate), 'dd MMM yyyy') : '-'}
                   </span>
-                </div>
-                <div className="w-full bg-gray-100 rounded-full h-1.5">
-                  <div
-                    className="bg-primary-500 rounded-full h-1.5 transition-all"
-                    style={{
-                      width: `${Math.min(100, (assignment.submissions / assignment.total) * 100)}%`,
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between text-xs mb-2">
-                <span className="text-gray-400">
-                  Due: {assignment.dueDate ? format(new Date(assignment.dueDate), 'dd MMM yyyy') : '-'}
-                </span>
-                <span className="text-gray-500 font-medium">{assignment.submissions} submitted</span>
-              </div>
-
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    className="p-1 rounded hover:bg-gray-100 text-gray-600"
-                    onClick={() => updateSubmissions(assignment, -1)}
-                    aria-label="Decrease submissions"
-                  >
-                    <HiOutlineMinusCircle className="w-5 h-5" />
-                  </button>
-                  <button
-                    type="button"
-                    className="p-1 rounded hover:bg-gray-100 text-primary-600"
-                    onClick={() => updateSubmissions(assignment, 1)}
-                    aria-label="Increase submissions"
-                  >
-                    <HiOutlinePlusCircle className="w-5 h-5" />
-                  </button>
+                  <span className="text-gray-500 font-medium">{assignment.submissions} submitted</span>
                 </div>
 
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    className="px-2 py-1 text-xs rounded border border-gray-200 hover:border-primary-300 text-gray-600"
-                    onClick={() => openEditModal(assignment)}
-                  >
-                    <HiOutlinePencil className="w-3.5 h-3.5 inline mr-1" />
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    className="px-2 py-1 text-xs rounded border border-red-200 hover:border-red-300 text-red-600"
-                    onClick={() => handleDelete(assignment.id)}
-                  >
-                    <HiOutlineTrash className="w-3.5 h-3.5 inline mr-1" />
-                    Delete
-                  </button>
-                </div>
+                {isTeacher ? (
+                  <div className="flex items-center justify-end gap-1">
+                    <button
+                      type="button"
+                      className="px-2 py-1 text-xs rounded border border-gray-200 hover:border-primary-300 text-gray-600"
+                      onClick={() => openEditModal(assignment)}
+                    >
+                      <HiOutlinePencil className="w-3.5 h-3.5 inline mr-1" />
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="px-2 py-1 text-xs rounded border border-red-200 hover:border-red-300 text-red-600"
+                      onClick={() => handleDelete(assignment.id)}
+                    >
+                      <HiOutlineTrash className="w-3.5 h-3.5 inline mr-1" />
+                      Delete
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-end gap-1">
+                    {(() => {
+                      const submissionKey = `${currentStudentKey}:${assignment.id}`;
+                      const submitted = Boolean(studentSubmissions[submissionKey]);
+                      const isDraft = assignment.status === 'draft';
+                      return submitted ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded border border-green-200 text-green-700 bg-green-50">
+                          <HiOutlineCheckCircle className="w-3.5 h-3.5" />
+                          Submitted
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={isDraft}
+                          className={`px-2 py-1 text-xs rounded border ${
+                            isDraft
+                              ? 'border-gray-200 text-gray-400 cursor-not-allowed'
+                              : 'border-primary-300 text-primary-700 hover:border-primary-500'
+                          }`}
+                          onClick={() => {
+                            if (!isDraft) handleStudentSubmit(assignment);
+                          }}
+                        >
+                          Submit
+                        </button>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      <Modal
-        isOpen={isCreateOpen}
-        onClose={() => {
-          if (isSaving) return;
-          setIsCreateOpen(false);
-          setEditingAssignmentId(null);
-          resetForm();
-        }}
-        title={editingAssignmentId ? 'Edit Assignment' : 'Create Assignment'}
-      >
-        <form onSubmit={handleCreateOrUpdateAssignment} className="space-y-4">
+      {isTeacher && (
+        <Modal
+          isOpen={isModalOpen}
+          onClose={() => {
+            if (isSaving) return;
+            setIsModalOpen(false);
+            setEditingAssignmentId(null);
+            resetForm();
+          }}
+          title={editingAssignmentId ? 'Edit Assignment' : 'Create Assignment'}
+        >
+          <form onSubmit={handleCreateOrUpdate} className="space-y-4">
           <div>
             <label htmlFor="assignment-title" className="block text-sm font-medium text-gray-700 mb-1">
               Title
@@ -642,11 +733,7 @@ export default function AssignmentsPage() {
               <select
                 id="assignment-class"
                 value={formData.classCode}
-                onChange={(e) => {
-                  const classCode = e.target.value;
-                  const nextTotal = getStudentCountForGroup(classCode, formData.section, formData.shift);
-                  setFormData((prev) => ({ ...prev, classCode, total: nextTotal }));
-                }}
+                onChange={(e) => setFormData((prev) => ({ ...prev, classCode: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 {classOptions.filter((option) => option.value).map((option) => (
@@ -663,11 +750,7 @@ export default function AssignmentsPage() {
               <select
                 id="assignment-section"
                 value={formData.section}
-                onChange={(e) => {
-                  const section = e.target.value;
-                  const nextTotal = getStudentCountForGroup(formData.classCode, section, formData.shift);
-                  setFormData((prev) => ({ ...prev, section, total: nextTotal }));
-                }}
+                onChange={(e) => setFormData((prev) => ({ ...prev, section: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 {sectionOptions.filter((option) => option.value).map((option) => (
@@ -684,11 +767,7 @@ export default function AssignmentsPage() {
               <select
                 id="assignment-shift"
                 value={formData.shift}
-                onChange={(e) => {
-                  const shift = e.target.value;
-                  const nextTotal = getStudentCountForGroup(formData.classCode, formData.section, shift);
-                  setFormData((prev) => ({ ...prev, shift, total: nextTotal }));
-                }}
+                onChange={(e) => setFormData((prev) => ({ ...prev, shift: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 {shiftOptions.filter((option) => option.value).map((option) => (
@@ -716,18 +795,34 @@ export default function AssignmentsPage() {
             </div>
             <div>
               <label htmlFor="assignment-total" className="block text-sm font-medium text-gray-700 mb-1">
-                Total Students
+                Total Students (Auto)
               </label>
               <input
                 id="assignment-total"
                 type="number"
-                min="1"
-                value={formData.total}
-                onChange={(e) => setFormData((prev) => ({ ...prev, total: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                value={selectedGroupTotal}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-700"
+                readOnly
               />
             </div>
           </div>
+
+          {showSubmissionField && (
+            <div>
+              <label htmlFor="assignment-submissions" className="block text-sm font-medium text-gray-700 mb-1">
+                Submitted Count
+              </label>
+              <input
+                id="assignment-submissions"
+                type="number"
+                min="0"
+                max={Math.max(0, selectedGroupTotal)}
+                value={formData.submissions}
+                onChange={(e) => setFormData((prev) => ({ ...prev, submissions: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+          )}
 
           <div>
             <label htmlFor="assignment-description" className="block text-sm font-medium text-gray-700 mb-1">
@@ -745,7 +840,7 @@ export default function AssignmentsPage() {
 
           <div>
             <label htmlFor="assignment-status" className="block text-sm font-medium text-gray-700 mb-1">
-              Status
+              Publishing State
             </label>
             <select
               id="assignment-status"
@@ -753,9 +848,8 @@ export default function AssignmentsPage() {
               onChange={(e) => setFormData((prev) => ({ ...prev, status: e.target.value }))}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
-              <option value="active">Active</option>
+              <option value="active">Published</option>
               <option value="draft">Draft</option>
-              <option value="completed">Completed</option>
             </select>
           </div>
 
@@ -764,7 +858,7 @@ export default function AssignmentsPage() {
               type="button"
               variant="secondary"
               onClick={() => {
-                setIsCreateOpen(false);
+                setIsModalOpen(false);
                 setEditingAssignmentId(null);
                 resetForm();
               }}
@@ -776,8 +870,9 @@ export default function AssignmentsPage() {
               {editingAssignmentId ? 'Save Changes' : 'Create'}
             </Button>
           </div>
-        </form>
-      </Modal>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }
