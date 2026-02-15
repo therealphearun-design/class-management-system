@@ -21,6 +21,10 @@ const renderWithContext = (component) => {
 };
 
 describe('StudentCard', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
   it('renders student name correctly', () => {
     renderWithContext(<StudentCard student={mockStudent} />);
     expect(screen.getByText('John Doe')).toBeInTheDocument();
@@ -33,14 +37,14 @@ describe('StudentCard', () => {
 
   it('marks attendance when P button is clicked', () => {
     renderWithContext(<StudentCard student={mockStudent} />);
-    const presentButton = screen.getByText('P');
+    const presentButton = screen.getByTitle('Present');
     fireEvent.click(presentButton);
     expect(presentButton).toHaveClass('present');
   });
 
   it('toggles attendance status on repeated clicks', () => {
     renderWithContext(<StudentCard student={mockStudent} />);
-    const presentButton = screen.getByText('P');
+    const presentButton = screen.getByTitle('Present');
     
     fireEvent.click(presentButton);
     expect(presentButton).toHaveClass('present');

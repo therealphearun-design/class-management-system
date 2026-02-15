@@ -134,15 +134,21 @@ export function generateOfficialTimetable({
   track = 'science',
   shift = 'Morning',
   periodMinutes = 45,
+  curriculumOverride = null,
 }) {
-  const curriculum = getCurriculumByClass(classCode, track);
-  const [minPeriods] = curriculum.totalPeriodsRange;
+  const defaultCurriculum = getCurriculumByClass(classCode, track);
+  const curriculum = curriculumOverride || defaultCurriculum;
+  const [minPeriods] = defaultCurriculum.totalPeriodsRange;
   const slotsPerDay = 6;
   const weeklySlots = DAY_KEYS.length * slotsPerDay;
+  const overridePeriods = Array.isArray(curriculum?.subjects)
+    ? curriculum.subjects.reduce((sum, item) => sum + (Number(item.periods) || 0), 0)
+    : 0;
+  const targetPeriods = curriculumOverride ? Math.max(overridePeriods, 1) : minPeriods;
 
   const expanded = expandSubjects(curriculum.subjects);
   const subjectQueue = [...expanded];
-  while (subjectQueue.length < minPeriods) {
+  while (subjectQueue.length < targetPeriods) {
     subjectQueue.push('Revision / Guided Study');
   }
   while (subjectQueue.length < weeklySlots) {
@@ -159,7 +165,7 @@ export function generateOfficialTimetable({
     return row;
   });
 
-  const officialHours = Number(((minPeriods * periodMinutes) / 60).toFixed(1));
+  const officialHours = Number(((targetPeriods * periodMinutes) / 60).toFixed(1));
 
   return {
     ...curriculum,
@@ -167,7 +173,7 @@ export function generateOfficialTimetable({
     days: DAY_LABELS,
     dayKeys: DAY_KEYS,
     slotsPerDay,
-    weeklyPeriods: minPeriods,
+    weeklyPeriods: targetPeriods,
     officialHours,
   };
 }

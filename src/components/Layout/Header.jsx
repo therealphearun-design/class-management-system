@@ -193,15 +193,15 @@ export default function Header({ onMenuToggle, isMenuEnabled, onMenuVisibilityTo
         </div>
       </div>
 
-      <div className="bg-gradient-to-r from-[#243671] to-[#2b3f86] px-3 sm:px-6 py-2 border-b border-blue-900">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
-          <nav className="hidden lg:flex items-center gap-4 text-xs font-semibold text-blue-50">
+      <div className="bg-gradient-to-r from-[#243671] to-[#2b3f86] px-3 sm:px-6 h-10 border-b border-blue-900">
+        <div className="max-w-7xl mx-auto h-full flex items-center justify-between gap-3">
+          <nav className="hidden lg:flex h-full items-stretch gap-4 text-xs font-semibold text-blue-50">
             {projectNavItems.filter((item) => item.roles.includes(role)).map((item) => (
               <button
                 key={item.label}
                 type="button"
                 onClick={() => navigate(item.to)}
-                className="px-1.5 py-0.5 hover:text-white transition-colors whitespace-nowrap"
+                className="h-full px-3 text-[13px] whitespace-nowrap text-blue-100 hover:bg-white/10 hover:text-white active:bg-white/20 transition-colors"
               >
                 {item.label}
               </button>
