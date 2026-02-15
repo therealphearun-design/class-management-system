@@ -163,8 +163,11 @@ function AppRoutes() {
 }
 
 export default function App() {
+  const rawBase = process.env.PUBLIC_URL;
+  const routerBase = rawBase && rawBase !== '.' ? rawBase : '/';
+
   return (
-    <BrowserRouter basename={process.env.PUBLIC_URL}>
+    <BrowserRouter basename={routerBase}>
       <ThemeProvider>
         <AuthProvider>
           <AttendanceProvider>
