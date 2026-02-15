@@ -3,6 +3,14 @@ import React, { createContext, useContext, useReducer, useCallback } from 'react
 import { ACCOUNT_ROLES, getRoleLabel, normalizeRole } from '../constants/roles';
 
 const AuthContext = createContext(null);
+const ADMIN_CENTER_EMAILS = [
+  'nim.cheyseth.2824@rupp.edu.kh',
+  'thet.englang.2824@rupp.edu.kh',
+  'po.phearun.2824@rupp.edu.kh',
+];
+const ADMIN_CENTER_PASSWORD = 'Admin1234';
+const ALLOWED_STUDENT_EMAIL = 'student123@fake.com';
+const ALLOWED_STUDENT_PASSWORD = 'Studentfake';
 
 const initialState = {
   user: null,
@@ -39,10 +47,14 @@ function authReducer(state, action) {
 function normalizeUser(user) {
   if (!user) return user;
   const normalizedRole = normalizeRole(user.role);
+  const isAdminCenterMember = Boolean(user.isAdminCenterMember);
   return {
     ...user,
     role: normalizedRole,
-    roleLabel: getRoleLabel(normalizedRole),
+    roleLabel: isAdminCenterMember
+      ? `${getRoleLabel(normalizedRole)} - Admin Center`
+      : getRoleLabel(normalizedRole),
+    isAdminCenterMember,
   };
 }
 
@@ -55,6 +67,7 @@ export function AuthProvider({ children }) {
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       if (email && password) {
+        const normalizedEmail = String(email).trim().toLowerCase();
         const username = email.split('@')[0];
         const formattedName = username
           .split(/[._-]/)
@@ -62,14 +75,37 @@ export function AuthProvider({ children }) {
           .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
           .join(' ');
         const normalizedRole = normalizeRole(selectedRole);
+        const isAdminCenterMember = ADMIN_CENTER_EMAILS.includes(normalizedEmail);
+
+        if (normalizedRole === ACCOUNT_ROLES.TEACHER) {
+          if (!isAdminCenterMember) {
+            throw new Error('Teacher access is restricted to Admin Center members.');
+          }
+          if (password !== ADMIN_CENTER_PASSWORD) {
+            throw new Error('Invalid Admin Center password.');
+          }
+        }
+
+        if (normalizedRole === ACCOUNT_ROLES.STUDENT) {
+          if (normalizedEmail !== ALLOWED_STUDENT_EMAIL) {
+            throw new Error(`Student access is restricted to ${ALLOWED_STUDENT_EMAIL}.`);
+          }
+          if (password !== ALLOWED_STUDENT_PASSWORD) {
+            throw new Error('Invalid Student password.');
+          }
+        }
+
         const user = {
           id: 1,
           name: formattedName || 'User',
-          email,
+          email: normalizedEmail,
           role: normalizedRole,
-          roleLabel: getRoleLabel(normalizedRole),
+          roleLabel: isAdminCenterMember
+            ? `${getRoleLabel(normalizedRole)} - Admin Center`
+            : getRoleLabel(normalizedRole),
+          isAdminCenterMember,
           phone: '',
-          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`,
+          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${normalizedEmail}`,
         };
         dispatch({ type: 'LOGIN_SUCCESS', payload: user });
         localStorage.setItem('auth_user', JSON.stringify(user));
