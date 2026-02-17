@@ -67,6 +67,17 @@ const getStudentKeyFromSubmission = (submissionKey, submissionValue) => {
   return idx >= 0 ? key.slice(0, idx) : key;
 };
 
+const getSubmissionFileUrl = (submission) =>
+  String(
+    submission?.fileDataUrl ||
+      submission?.fileUrl ||
+      submission?.url ||
+      submission?.attachmentUrl ||
+      ''
+  ).trim();
+
+const isDataUrl = (value) => /^data:/i.test(String(value || ''));
+
 const saveLocalAssignments = (items) => {
   try {
     localStorage.setItem(LOCAL_ASSIGNMENTS_KEY, JSON.stringify(items));
@@ -147,6 +158,7 @@ export default function AssignmentsPage() {
   const [isSubmissionListModalOpen, setIsSubmissionListModalOpen] = useState(false);
   const [selectedTeacherAssignment, setSelectedTeacherAssignment] = useState(null);
   const [submitFile, setSubmitFile] = useState(null);
+  const [submitPreviewUrl, setSubmitPreviewUrl] = useState('');
   const [submitNote, setSubmitNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
@@ -589,6 +601,15 @@ export default function AssignmentsPage() {
       fileDataUrl = '';
     }
 
+    if (!fileDataUrl) {
+      setNotification({
+        type: 'error',
+        message: 'Could not prepare file for preview/open. Please try another file.',
+      });
+      setTimeout(() => setNotification(null), 3500);
+      return;
+    }
+
     const submissionPayload = {
       id: `${assignment.id}:${currentStudentKey}:${submittedAt}`,
       assignmentId: assignment.id,
@@ -632,7 +653,97 @@ export default function AssignmentsPage() {
     setIsSubmitModalOpen(false);
     setSelectedAssignment(null);
     setSubmitFile(null);
+    if (submitPreviewUrl) {
+      URL.revokeObjectURL(submitPreviewUrl);
+      setSubmitPreviewUrl('');
+    }
     setSubmitNote('');
+  };
+
+  const handleStudentCancelSubmission = async (assignment) => {
+    const submissionKey = `${currentStudentKey}:${assignment.id}`;
+    if (!studentSubmissions[submissionKey]) return;
+
+    if (!window.confirm('Cancel your hand-in for this assignment?')) return;
+
+    const nextSubmissions = { ...studentSubmissions };
+    delete nextSubmissions[submissionKey];
+    persistSubmissions(nextSubmissions);
+
+    const nextAssignments = assignments.map((item) => {
+      if (String(item.id) !== String(assignment.id)) return item;
+      if (item.status === 'draft') return item;
+      return {
+        ...item,
+        submissions: Math.max(0, (Number(item.submissions) || 0) - 1),
+      };
+    });
+    persistAssignments(nextAssignments);
+
+    setNotification({ type: 'success', message: 'Hand-in cancelled.' });
+    setTimeout(() => setNotification(null), 3000);
+  };
+
+  const handleSubmitFileChange = (file) => {
+    if (submitPreviewUrl) {
+      URL.revokeObjectURL(submitPreviewUrl);
+    }
+
+    setSubmitFile(file);
+    if (!file) {
+      setSubmitPreviewUrl('');
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    setSubmitPreviewUrl(previewUrl);
+  };
+
+  const openSubmissionFile = async (submission) => {
+    const rawUrl = getSubmissionFileUrl(submission);
+    if (!rawUrl) {
+      setNotification({ type: 'error', message: 'No file URL found for this submission.' });
+      setTimeout(() => setNotification(null), 3000);
+      return;
+    }
+
+    let temporaryObjectUrl = '';
+    try {
+      let openUrl = rawUrl;
+      if (isDataUrl(rawUrl)) {
+        const blob = await fetch(rawUrl).then((response) => response.blob());
+        temporaryObjectUrl = URL.createObjectURL(blob);
+        openUrl = temporaryObjectUrl;
+      }
+
+      const popup = window.open(openUrl, '_blank', 'noopener,noreferrer');
+      if (!popup) {
+        throw new Error('Popup blocked');
+      }
+    } catch {
+      setNotification({ type: 'error', message: 'Could not open this file. Try uploading and submitting again.' });
+      setTimeout(() => setNotification(null), 3500);
+    } finally {
+      if (temporaryObjectUrl) {
+        setTimeout(() => URL.revokeObjectURL(temporaryObjectUrl), 60000);
+      }
+    }
+  };
+
+  const openSelectedFilePreview = () => {
+    if (!submitFile) {
+      setNotification({ type: 'error', message: 'Please select a file first.' });
+      setTimeout(() => setNotification(null), 3000);
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(submitFile);
+    const popup = window.open(objectUrl, '_blank', 'noopener,noreferrer');
+    if (!popup) {
+      setNotification({ type: 'error', message: 'Popup blocked. Please allow popups for this site.' });
+      setTimeout(() => setNotification(null), 3500);
+    }
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
   };
 
   const selectedGroupTotal = getStudentCountForGroup(formData.classCode, formData.section, formData.shift);
@@ -873,16 +984,24 @@ export default function AssignmentsPage() {
                               File: {submission.fileName}
                             </p>
                           ) : null}
-                          {submission?.fileDataUrl ? (
-                            <a
-                              href={submission.fileDataUrl}
-                              target="_blank"
-                              rel="noreferrer"
+                          {getSubmissionFileUrl(submission) ? (
+                            <button
+                              type="button"
                               className="inline-block mt-1 text-[11px] text-primary-700 hover:underline"
+                              onClick={() => openSubmissionFile(submission)}
                             >
                               Open submission
-                            </a>
+                            </button>
                           ) : null}
+                          <div>
+                            <button
+                              type="button"
+                              className="inline-block mt-1 text-[11px] text-red-600 hover:underline"
+                              onClick={() => handleStudentCancelSubmission(assignment)}
+                            >
+                              Cancel hand-in
+                            </button>
+                          </div>
                         </div>
                       ) : (
                         <button
@@ -896,7 +1015,7 @@ export default function AssignmentsPage() {
                           onClick={() => {
                             if (!isDraft) {
                               setSelectedAssignment(assignment);
-                              setSubmitFile(null);
+                              handleSubmitFileChange(null);
                               setSubmitNote('');
                               setIsSubmitModalOpen(true);
                             }
@@ -1151,15 +1270,14 @@ export default function AssignmentsPage() {
                               <td className="px-3 py-2 text-gray-700">{dateLabel}</td>
                               <td className="px-3 py-2 text-gray-700">{timeLabel}</td>
                               <td className="px-3 py-2 text-gray-700">
-                                {item.fileDataUrl ? (
-                                  <a
-                                    href={item.fileDataUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
+                                {getSubmissionFileUrl(item) ? (
+                                  <button
+                                    type="button"
                                     className="text-primary-700 hover:underline"
+                                    onClick={() => openSubmissionFile(item)}
                                   >
                                     {item.fileName || 'Open'}
-                                  </a>
+                                  </button>
                                 ) : (
                                   item.fileName || '-'
                                 )}
@@ -1184,7 +1302,7 @@ export default function AssignmentsPage() {
             if (isSubmitting) return;
             setIsSubmitModalOpen(false);
             setSelectedAssignment(null);
-            setSubmitFile(null);
+            handleSubmitFileChange(null);
             setSubmitNote('');
           }}
           title="Submit Assignment"
@@ -1210,18 +1328,27 @@ export default function AssignmentsPage() {
               <label htmlFor="assignment-submit-file" className="block text-sm font-medium text-gray-700 mb-1">
                 Submission File
               </label>
-              <input
-                id="assignment-submit-file"
-                type="file"
-                required
-                accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.zip,.rar,image/*"
-                onChange={(e) => setSubmitFile(e.target.files?.[0] || null)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 file:mr-3 file:px-3 file:py-1.5 file:border-0 file:rounded-md file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
-              />
+                <input
+                  id="assignment-submit-file"
+                  type="file"
+                  required
+                  accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.zip,.rar,image/*"
+                  onChange={(e) => handleSubmitFileChange(e.target.files?.[0] || null)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 file:mr-3 file:px-3 file:py-1.5 file:border-0 file:rounded-md file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
+                />
               {submitFile && (
                 <p className="text-xs text-gray-500 mt-1">
                   Selected: {submitFile.name} ({Math.max(1, Math.round(submitFile.size / 1024))} KB)
                 </p>
+              )}
+              {submitPreviewUrl && submitFile && (
+                <button
+                  type="button"
+                  onClick={openSelectedFilePreview}
+                  className="inline-block text-xs text-primary-700 hover:underline mt-1"
+                >
+                  Open selected file to verify
+                </button>
               )}
             </div>
 
@@ -1243,12 +1370,12 @@ export default function AssignmentsPage() {
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => {
-                  setIsSubmitModalOpen(false);
-                  setSelectedAssignment(null);
-                  setSubmitFile(null);
-                  setSubmitNote('');
-                }}
+                  onClick={() => {
+                    setIsSubmitModalOpen(false);
+                    setSelectedAssignment(null);
+                    handleSubmitFileChange(null);
+                    setSubmitNote('');
+                  }}
                 disabled={isSubmitting}
               >
                 Cancel

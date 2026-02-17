@@ -30,7 +30,8 @@ const roleAliases = {
 
 export function normalizeRole(role) {
   const key = String(role || '').trim().toLowerCase();
-  return roleAliases[key] || ACCOUNT_ROLES.TEACHER;
+  // Fail closed to least-privileged role when role is missing/invalid.
+  return roleAliases[key] || ACCOUNT_ROLES.STUDENT;
 }
 
 export function getRoleLabel(role) {
