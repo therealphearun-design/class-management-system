@@ -23,6 +23,7 @@ const LOCAL_STUDENTS_KEY = 'students_local_v2';
 const LOCAL_ASSIGNMENT_SUBMISSIONS_KEY = 'assignment_submissions_local_v1';
 const LOCAL_ASSIGNMENT_ANNOUNCEMENTS_KEY = 'assignment_announcements_local_v1';
 const LOCAL_ASSIGNMENT_SEEN_KEY = 'assignment_seen_by_student_v1';
+const LOCAL_ASSIGNMENT_SUBMISSION_SEEN_BY_TEACHER_KEY = 'assignment_submission_seen_by_teacher_v1';
 
 const readLocalData = (key) => {
   try {
@@ -42,6 +43,28 @@ const readLocalObject = (key) => {
   } catch {
     return {};
   }
+};
+
+const fileToDataUrl = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.onerror = () => reject(new Error('Unable to read file.'));
+    reader.readAsDataURL(file);
+  });
+
+const getAssignmentIdFromSubmission = (submissionKey, submissionValue) => {
+  if (submissionValue?.assignmentId != null) return String(submissionValue.assignmentId);
+  const key = String(submissionKey || '');
+  const idx = key.lastIndexOf(':');
+  return idx >= 0 ? key.slice(idx + 1) : '';
+};
+
+const getStudentKeyFromSubmission = (submissionKey, submissionValue) => {
+  if (submissionValue?.student) return String(submissionValue.student);
+  const key = String(submissionKey || '');
+  const idx = key.lastIndexOf(':');
+  return idx >= 0 ? key.slice(0, idx) : key;
 };
 
 const saveLocalAssignments = (items) => {
@@ -121,6 +144,8 @@ export default function AssignmentsPage() {
   const [notification, setNotification] = useState(null);
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
   const [selectedAssignment, setSelectedAssignment] = useState(null);
+  const [isSubmissionListModalOpen, setIsSubmissionListModalOpen] = useState(false);
+  const [selectedTeacherAssignment, setSelectedTeacherAssignment] = useState(null);
   const [submitFile, setSubmitFile] = useState(null);
   const [submitNote, setSubmitNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -236,6 +261,86 @@ export default function AssignmentsPage() {
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, [currentStudentKey, isTeacher]);
+
+  const submissionsByAssignment = useMemo(() => {
+    const byAssignment = {};
+    const studentByEmail = new Map(
+      students
+        .filter((item) => item?.email)
+        .map((item) => [String(item.email).toLowerCase(), item])
+    );
+
+    Object.entries(studentSubmissions).forEach(([submissionKey, value]) => {
+      if (!value || typeof value !== 'object') return;
+      const assignmentId = getAssignmentIdFromSubmission(submissionKey, value);
+      if (!assignmentId) return;
+      const studentKey = getStudentKeyFromSubmission(submissionKey, value);
+      const fallbackStudent = studentByEmail.get(String(studentKey).toLowerCase());
+      const submittedAt = value.submittedAt || '';
+      const submissionId = value.id || `${submissionKey}:${submittedAt || 'unknown'}`;
+
+      const entry = {
+        ...value,
+        id: submissionId,
+        assignmentId,
+        student: studentKey,
+        studentName: value.studentName || fallbackStudent?.name || studentKey,
+      };
+
+      if (!byAssignment[assignmentId]) byAssignment[assignmentId] = [];
+      byAssignment[assignmentId].push(entry);
+    });
+
+    Object.keys(byAssignment).forEach((assignmentId) => {
+      byAssignment[assignmentId] = byAssignment[assignmentId].sort((a, b) =>
+        String(b.submittedAt || '').localeCompare(String(a.submittedAt || ''))
+      );
+    });
+
+    return byAssignment;
+  }, [studentSubmissions, students]);
+
+  useEffect(() => {
+    if (!isTeacher) return;
+
+    const teacherKey = String(user?.email || user?.id || user?.name || 'teacher');
+    const seenByTeacher = readLocalObject(LOCAL_ASSIGNMENT_SUBMISSION_SEEN_BY_TEACHER_KEY);
+    const seenForCurrent = Array.isArray(seenByTeacher[teacherKey]) ? seenByTeacher[teacherKey] : [];
+    const allSubmissionIds = Object.values(submissionsByAssignment)
+      .flat()
+      .map((item) => String(item.id));
+    const unseenSubmissionIds = allSubmissionIds.filter((id) => !seenForCurrent.includes(id));
+
+    if (unseenSubmissionIds.length > 0) {
+      setNotification({
+        type: 'success',
+        message:
+          unseenSubmissionIds.length === 1
+            ? '1 new assignment submission received.'
+            : `${unseenSubmissionIds.length} new assignment submissions received.`,
+      });
+      setTimeout(() => setNotification(null), 4000);
+
+      const nextSeen = {
+        ...seenByTeacher,
+        [teacherKey]: [...new Set([...seenForCurrent, ...unseenSubmissionIds])],
+      };
+      try {
+        localStorage.setItem(LOCAL_ASSIGNMENT_SUBMISSION_SEEN_BY_TEACHER_KEY, JSON.stringify(nextSeen));
+      } catch {
+        // Ignore storage errors.
+      }
+    }
+
+    const onStorage = (event) => {
+      if (event.key !== LOCAL_ASSIGNMENT_SUBMISSIONS_KEY) return;
+      const latest = readLocalObject(LOCAL_ASSIGNMENT_SUBMISSIONS_KEY);
+      setStudentSubmissions(latest);
+    };
+
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [isTeacher, submissionsByAssignment, user]);
 
   const persistSubmissions = (nextSubmissions) => {
     setStudentSubmissions(nextSubmissions);
@@ -477,13 +582,25 @@ export default function AssignmentsPage() {
     formDataPayload.append('note', submitNote.trim());
     formDataPayload.append('file', submitFile);
 
+    let fileDataUrl = '';
+    try {
+      fileDataUrl = await fileToDataUrl(submitFile);
+    } catch {
+      fileDataUrl = '';
+    }
+
     const submissionPayload = {
+      id: `${assignment.id}:${currentStudentKey}:${submittedAt}`,
+      assignmentId: assignment.id,
       student: currentStudentKey,
+      studentName: String(user?.name || '').trim() || currentStudentKey,
+      studentEmail: String(user?.email || '').trim(),
       submittedAt,
       note: submitNote.trim(),
       fileName: submitFile.name,
       fileSize: submitFile.size,
       fileType: submitFile.type || 'application/octet-stream',
+      fileDataUrl,
     };
 
     setIsSubmitting(true);
@@ -721,6 +838,16 @@ export default function AssignmentsPage() {
                     </button>
                     <button
                       type="button"
+                      className="px-2 py-1 text-xs rounded border border-blue-200 hover:border-blue-300 text-blue-700"
+                      onClick={() => {
+                        setSelectedTeacherAssignment(assignment);
+                        setIsSubmissionListModalOpen(true);
+                      }}
+                    >
+                      Submissions ({(submissionsByAssignment[String(assignment.id)] || []).length})
+                    </button>
+                    <button
+                      type="button"
                       className="px-2 py-1 text-xs rounded border border-red-200 hover:border-red-300 text-red-600"
                       onClick={() => handleDelete(assignment.id)}
                     >
@@ -745,6 +872,16 @@ export default function AssignmentsPage() {
                             <p className="text-[11px] text-gray-500 mt-1">
                               File: {submission.fileName}
                             </p>
+                          ) : null}
+                          {submission?.fileDataUrl ? (
+                            <a
+                              href={submission.fileDataUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-block mt-1 text-[11px] text-primary-700 hover:underline"
+                            >
+                              Open submission
+                            </a>
                           ) : null}
                         </div>
                       ) : (
@@ -969,6 +1106,74 @@ export default function AssignmentsPage() {
             </Button>
           </div>
           </form>
+        </Modal>
+      )}
+
+      {isTeacher && (
+        <Modal
+          isOpen={isSubmissionListModalOpen}
+          onClose={() => {
+            setIsSubmissionListModalOpen(false);
+            setSelectedTeacherAssignment(null);
+          }}
+          title={`Submissions - ${selectedTeacherAssignment?.title || 'Assignment'}`}
+        >
+          <div className="space-y-3">
+            {(() => {
+              const list = submissionsByAssignment[String(selectedTeacherAssignment?.id || '')] || [];
+              if (list.length === 0) {
+                return <p className="text-sm text-gray-500">No submissions yet.</p>;
+              }
+
+              return (
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="max-h-72 overflow-y-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 sticky top-0">
+                        <tr>
+                          <th className="text-left px-3 py-2 text-gray-600 font-medium">Student</th>
+                          <th className="text-left px-3 py-2 text-gray-600 font-medium">Date</th>
+                          <th className="text-left px-3 py-2 text-gray-600 font-medium">Time</th>
+                          <th className="text-left px-3 py-2 text-gray-600 font-medium">File</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {list.map((item) => {
+                          const stamp = item.submittedAt ? new Date(item.submittedAt) : null;
+                          const dateLabel =
+                            stamp && !Number.isNaN(stamp.getTime()) ? format(stamp, 'dd MMM yyyy') : '-';
+                          const timeLabel =
+                            stamp && !Number.isNaN(stamp.getTime()) ? format(stamp, 'hh:mm a') : '-';
+
+                          return (
+                            <tr key={item.id} className="border-t border-gray-100">
+                              <td className="px-3 py-2 text-gray-800">{item.studentName}</td>
+                              <td className="px-3 py-2 text-gray-700">{dateLabel}</td>
+                              <td className="px-3 py-2 text-gray-700">{timeLabel}</td>
+                              <td className="px-3 py-2 text-gray-700">
+                                {item.fileDataUrl ? (
+                                  <a
+                                    href={item.fileDataUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-primary-700 hover:underline"
+                                  >
+                                    {item.fileName || 'Open'}
+                                  </a>
+                                ) : (
+                                  item.fileName || '-'
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
         </Modal>
       )}
 
