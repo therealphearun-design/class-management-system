@@ -505,7 +505,7 @@ export default function StudentLookupPage() {
                     <tr key={student.id} className="border-t border-gray-100">
                       <td className="px-3 py-2 text-gray-800">{student.name}</td>
                       <td className="px-3 py-2 text-gray-700">{student.studentId}</td>
-                      <td className="px-3 py-2 text-gray-700">{student.class} {student.section}</td>
+                      <td className="px-3 py-2 text-gray-700">{student.class}</td>
                       <td className="px-3 py-2 text-gray-700">{formatDobLabel(student.dateOfBirth)}</td>
                       <td className="px-3 py-2 text-gray-700">{buildStudentPassword(student)}</td>
                       <td className="px-3 py-2">
