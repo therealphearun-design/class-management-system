@@ -150,36 +150,42 @@ function createCertificatePdfBlob(certificate) {
   const gradeLabel = certificate.grade || '-';
   const certificateType = certificate.certificateType || 'Certificate';
   const description = certificate.description || '-';
+  const certificateNo = String(certificate.id || '000000').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 24);
   const nameFontSize = Math.max(22, Math.min(30, 340 / Math.max(1, String(studentName).length * 0.5)));
-  const detailLines = wrapPdfText(`Description: ${description}`, 11, 430);
+  const detailLines = wrapPdfText(`Statement: ${description}`, 11, 430);
 
   const lines = [
-    '0.78 0.58 0.16 RG 3 w 28 28 539.28 785.89 re S',
-    '0.78 0.58 0.16 RG 1.2 w 45 45 505.28 751.89 re S',
-    buildCenteredTextCommand('CLASS MANAGEMENT SCHOOL', 24, 750, pageWidth),
-    buildCenteredTextCommand('OFFICIAL STUDENT CERTIFICATE', 15, 720, pageWidth),
-    buildCenteredTextCommand('This certificate is proudly presented to', 13, 660, pageWidth),
-    buildCenteredTextCommand(studentName, nameFontSize, 610, pageWidth),
+    '0 G 0 g',
+    '0 G 2.2 w 28 28 539.28 785.89 re S',
+    '0 G 1.1 w 42 42 511.28 757.89 re S',
+    buildCenteredTextCommand('KINGDOM OF CAMBODIA', 17, 770, pageWidth),
+    buildCenteredTextCommand('NATION RELIGION KING', 12, 748, pageWidth),
+    buildCenteredTextCommand('MINISTRY OF EDUCATION, YOUTH AND SPORT', 12, 728, pageWidth),
+    buildCenteredTextCommand('CLASS MANAGEMENT SCHOOL', 22, 700, pageWidth),
+    buildCenteredTextCommand('OFFICIAL CERTIFICATE STATEMENT', 14, 674, pageWidth),
+    buildTextCommand(`Certificate No: ${certificateNo || '-'}`, 10, 80, 650),
+    buildCenteredTextCommand('This certifies that', 13, 620, pageWidth),
+    buildCenteredTextCommand(studentName, nameFontSize, 580, pageWidth),
     buildCenteredTextCommand(
-      `for ${certificateType.toLowerCase()} and outstanding performance.`,
+      `has been granted ${certificateType.toLowerCase()} recognition.`,
       14,
-      570,
+      545,
       pageWidth
     ),
     buildCenteredTextCommand(
       `Class: ${classLabel}   Shift: ${shiftLabel}   Grade: ${gradeLabel}`,
       12,
-      540,
+      518,
       pageWidth
     ),
-    buildTextCommand(`Issue Date: ${issueDateLabel}`, 11, 80, 460),
-    buildTextCommand('School Principal', 11, 90, 250),
-    buildTextCommand('Class Teacher', 11, 410, 250),
-    '0 G 1 w 80 265 m 230 265 l S',
-    '0 G 1 w 365 265 m 515 265 l S',
+    buildTextCommand(`Issued Date: ${issueDateLabel}`, 11, 80, 430),
+    buildTextCommand('School Principal', 11, 90, 225),
+    buildTextCommand('Class Teacher', 11, 410, 225),
+    '0 G 1 w 80 240 m 230 240 l S',
+    '0 G 1 w 365 240 m 515 240 l S',
   ];
   detailLines.forEach((line, index) => {
-    lines.splice(9 + index, 0, buildTextCommand(line, 11, 80, 500 - (index * 16)));
+    lines.splice(14 + index, 0, buildTextCommand(line, 11, 80, 475 - (index * 16)));
   });
 
   const contentStream = lines.join('\n');
