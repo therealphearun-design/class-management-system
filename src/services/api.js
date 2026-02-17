@@ -84,7 +84,13 @@ export const assignmentsAPI = {
   create: (data) => api.post('/assignments', data),
   update: (id, data) => api.put(`/assignments/${id}`, data),
   delete: (id) => api.delete(`/assignments/${id}`),
-  submit: (id, data) => api.post(`/assignments/${id}/submit`, data),
+  submit: (id, data) => api.post(
+    `/assignments/${id}/submit`,
+    data,
+    data instanceof FormData
+      ? { headers: { 'Content-Type': 'multipart/form-data' } }
+      : undefined
+  ),
   grade: (id, data) => api.post(`/assignments/${id}/grade`, data),
 };
 

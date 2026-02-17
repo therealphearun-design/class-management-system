@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   HiOutlineBell,
   HiOutlineCog,
+  HiOutlineLogout,
   HiOutlineMail,
   HiOutlineMoon,
   HiOutlineSearch,
@@ -22,6 +23,7 @@ const projectNavItems = [
   { label: 'Dashboard', to: '/dashboard', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },
   { label: 'Attendance', to: '/attendance', roles: [ACCOUNT_ROLES.TEACHER] },
   { label: 'Students', to: '/students', roles: [ACCOUNT_ROLES.TEACHER] },
+  { label: 'Student Lookup', to: '/student-lookup', roles: [ACCOUNT_ROLES.TEACHER] },
   { label: 'Assignments', to: '/assignments', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },
   { label: 'Exams', to: '/exams', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },
   { label: 'Certificates', to: '/certificates', roles: [ACCOUNT_ROLES.TEACHER] },
@@ -33,6 +35,7 @@ const pageEntries = [
   { id: 'dashboard', title: 'Dashboard', subtitle: 'Overview', path: '/dashboard', type: 'page', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },
   { id: 'attendance', title: 'Attendance', subtitle: 'Daily attendance', path: '/attendance', type: 'page', roles: [ACCOUNT_ROLES.TEACHER] },
   { id: 'students', title: 'Students', subtitle: 'Student records', path: '/students', type: 'page', roles: [ACCOUNT_ROLES.TEACHER] },
+  { id: 'student-lookup', title: 'Student Lookup', subtitle: 'Find by ID or email', path: '/student-lookup', type: 'page', roles: [ACCOUNT_ROLES.TEACHER] },
   { id: 'assignments', title: 'Assignments', subtitle: 'Homework and tasks', path: '/assignments', type: 'page', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },
   { id: 'exams', title: 'Exams', subtitle: 'Exam list and schedule', path: '/exams', type: 'page', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },
   { id: 'reports', title: 'Reports', subtitle: 'Analytics and reports', path: '/reports', type: 'page', roles: [ACCOUNT_ROLES.TEACHER] },
@@ -68,7 +71,7 @@ function MenuToggleIcon() {
 
 export default function Header({ onMenuToggle, isMenuEnabled, onMenuVisibilityToggle }) {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const role = normalizeRole(user?.role);
 
@@ -174,6 +177,10 @@ export default function Header({ onMenuToggle, isMenuEnabled, onMenuVisibilityTo
 
   const profileName = user?.name || user?.email?.split('@')[0] || 'User';
   const profileRole = formatRole(user);
+  const handleLogout = () => {
+    logout();
+    navigate('/login', { replace: true });
+  };
 
   return (
     <header className="sticky top-0 z-30 shadow-sm">
@@ -344,6 +351,15 @@ export default function Header({ onMenuToggle, isMenuEnabled, onMenuVisibilityTo
             aria-label="Open settings"
           >
             <HiOutlineCog className="w-5 h-5 text-gray-500" />
+          </button>
+
+          <button
+            onClick={handleLogout}
+            className="p-2 rounded-lg hover:bg-red-50 transition-colors"
+            aria-label="Logout"
+            title="Logout"
+          >
+            <HiOutlineLogout className="w-5 h-5 text-red-600" />
           </button>
 
           <div className="w-px h-8 bg-gray-200 mx-1 hidden sm:block" />

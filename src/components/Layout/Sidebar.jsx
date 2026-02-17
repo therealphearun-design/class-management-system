@@ -14,6 +14,7 @@ import {
   HiOutlineClock,
   HiOutlineClipboardList,
   HiOutlineUser,
+  HiOutlineSearch,
 } from 'react-icons/hi';
 import { NavLink } from 'react-router-dom';
 
@@ -24,6 +25,7 @@ const menuItems = [
   { path: '/dashboard', icon: HiOutlineHome, label: 'Dashboard', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },
   { path: '/attendance', icon: HiOutlineClipboardCheck, label: 'Attendance', roles: [ACCOUNT_ROLES.TEACHER] },
   { path: '/students', icon: HiOutlineUserGroup, label: 'Students', roles: [ACCOUNT_ROLES.TEACHER] },
+  { path: '/student-lookup', icon: HiOutlineSearch, label: 'Student Lookup', roles: [ACCOUNT_ROLES.TEACHER] },
   { path: '/schedule', icon: HiOutlineCalendar, label: 'Class Schedule', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },
   { path: '/marksheets', icon: HiOutlineDocumentText, label: 'Marksheets', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },
   { path: '/assignments', icon: HiOutlineBookOpen, label: 'Assignments', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },

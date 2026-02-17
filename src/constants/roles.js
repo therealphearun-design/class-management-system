@@ -13,7 +13,7 @@ export const ROLE_CAPABILITIES = {
     'View dashboard and personal overview',
     'Check schedule, exams, and marksheets',
     'View assignments and tasks',
-    'Use messages, calendar, and profile',
+    'Use calendar, to-do list, and profile',
   ],
   [ACCOUNT_ROLES.TEACHER]: [
     'All student account capabilities',

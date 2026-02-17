@@ -103,6 +103,9 @@ export default function AssignmentsPage() {
   const role = normalizeRole(user?.role);
   const isTeacher = role === ACCOUNT_ROLES.TEACHER;
   const currentStudentKey = String(user?.email || user?.id || user?.name || 'student');
+  const studentClass = String(user?.class || '').trim();
+  const studentSection = String(user?.section || '').trim();
+  const studentShift = String(user?.shift || '').trim();
 
   const [assignments, setAssignments] = useState([]);
   const [students, setStudents] = useState([]);
@@ -110,12 +113,17 @@ export default function AssignmentsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [classFilter, setClassFilter] = useState('all');
-  const [shiftFilter, setShiftFilter] = useState('all');
+  const [classFilter, setClassFilter] = useState(studentClass || 'all');
+  const [shiftFilter, setShiftFilter] = useState(studentShift || 'all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAssignmentId, setEditingAssignmentId] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [notification, setNotification] = useState(null);
+  const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
+  const [selectedAssignment, setSelectedAssignment] = useState(null);
+  const [submitFile, setSubmitFile] = useState(null);
+  const [submitNote, setSubmitNote] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
     subject: subjectOptions.find((opt) => opt.value === 'mathematics')?.label || 'Mathematics',
@@ -278,6 +286,14 @@ export default function AssignmentsPage() {
     const q = search.trim().toLowerCase();
     return assignments
       .filter((assignment) => {
+        if (!isTeacher) {
+          const classMatch = !studentClass || assignment.classCode === studentClass;
+          const sectionMatch = !studentSection || assignment.section === studentSection;
+          const shiftMatch = !studentShift || assignment.shift === studentShift;
+          if (!(classMatch && sectionMatch && shiftMatch)) return false;
+          if (assignment.status === 'draft') return false;
+        }
+
         const derivedStatus = getDerivedStatus(assignment);
         const matchesSearch =
           q.length === 0 ||
@@ -295,10 +311,17 @@ export default function AssignmentsPage() {
         if (da !== db) return da.localeCompare(db);
         return String(a.title).localeCompare(String(b.title));
       });
-  }, [assignments, classFilter, search, shiftFilter, statusFilter]);
+  }, [assignments, classFilter, isTeacher, search, shiftFilter, statusFilter, studentClass, studentSection, studentShift]);
 
   const stats = useMemo(() => {
     const base = assignments.filter((assignment) => {
+      if (!isTeacher) {
+        const classMatch = !studentClass || assignment.classCode === studentClass;
+        const sectionMatch = !studentSection || assignment.section === studentSection;
+        const shiftMatch = !studentShift || assignment.shift === studentShift;
+        if (!(classMatch && sectionMatch && shiftMatch)) return false;
+        if (assignment.status === 'draft') return false;
+      }
       const matchesClass = classFilter === 'all' || assignment.classCode === classFilter;
       const matchesShift = shiftFilter === 'all' || assignment.shift === shiftFilter;
       return matchesClass && matchesShift;
@@ -308,7 +331,7 @@ export default function AssignmentsPage() {
     const completed = base.filter((item) => getDerivedStatus(item) === 'completed').length;
     const draft = base.filter((item) => getDerivedStatus(item) === 'draft').length;
     return { total: base.length, active, overdue, completed, draft };
-  }, [assignments, classFilter, shiftFilter]);
+  }, [assignments, classFilter, isTeacher, shiftFilter, studentClass, studentSection, studentShift]);
 
   const persistAssignments = (nextAssignments) => {
     setAssignments(nextAssignments);
@@ -414,18 +437,58 @@ export default function AssignmentsPage() {
     setTimeout(() => setNotification(null), 3000);
   };
 
+  const handlePublish = async (assignment) => {
+    if (assignment.status !== 'draft') return;
+
+    const published = {
+      ...assignment,
+      status: 'active',
+      submissions: 0,
+    };
+
+    try {
+      await assignmentsAPI.update(assignment.id, published);
+    } catch {
+      // Keep local publish even when API is unavailable.
+    }
+
+    persistAssignments(
+      assignments.map((item) => (String(item.id) === String(assignment.id) ? normalizeAssignment(published) : item))
+    );
+    pushAssignmentAnnouncement(published);
+    setNotification({ type: 'success', message: 'Assignment published. Students can now see it.' });
+    setTimeout(() => setNotification(null), 3000);
+  };
+
   const handleStudentSubmit = async (assignment) => {
+    if (!submitFile) {
+      setNotification({ type: 'error', message: 'Please select a file to submit.' });
+      setTimeout(() => setNotification(null), 3000);
+      return;
+    }
+
     const submissionKey = `${currentStudentKey}:${assignment.id}`;
     if (studentSubmissions[submissionKey]) return;
 
     const submittedAt = new Date().toISOString();
+    const formDataPayload = new FormData();
+    formDataPayload.append('student', currentStudentKey);
+    formDataPayload.append('submittedAt', submittedAt);
+    formDataPayload.append('note', submitNote.trim());
+    formDataPayload.append('file', submitFile);
+
     const submissionPayload = {
       student: currentStudentKey,
       submittedAt,
+      note: submitNote.trim(),
+      fileName: submitFile.name,
+      fileSize: submitFile.size,
+      fileType: submitFile.type || 'application/octet-stream',
     };
 
+    setIsSubmitting(true);
     try {
-      await assignmentsAPI.submit(assignment.id, submissionPayload);
+      await assignmentsAPI.submit(assignment.id, formDataPayload);
     } catch {
       // Keep local submission even when API is unavailable.
     }
@@ -448,6 +511,11 @@ export default function AssignmentsPage() {
 
     setNotification({ type: 'success', message: 'Assignment submitted successfully.' });
     setTimeout(() => setNotification(null), 3000);
+    setIsSubmitting(false);
+    setIsSubmitModalOpen(false);
+    setSelectedAssignment(null);
+    setSubmitFile(null);
+    setSubmitNote('');
   };
 
   const selectedGroupTotal = getStudentCountForGroup(formData.classCode, formData.section, formData.shift);
@@ -517,32 +585,38 @@ export default function AssignmentsPage() {
           />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full sm:w-auto">
-          <select
-            value={classFilter}
-            onChange={(e) => setClassFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="all">All Classes</option>
-            {classOptions.filter((option) => option.value).map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.value}
-              </option>
-            ))}
-          </select>
-          <select
-            value={shiftFilter}
-            onChange={(e) => setShiftFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="all">All Shifts</option>
-            {shiftOptions.filter((option) => option.value).map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        {isTeacher ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full sm:w-auto">
+            <select
+              value={classFilter}
+              onChange={(e) => setClassFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              <option value="all">All Classes</option>
+              {classOptions.filter((option) => option.value).map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.value}
+                </option>
+              ))}
+            </select>
+            <select
+              value={shiftFilter}
+              onChange={(e) => setShiftFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              <option value="all">All Shifts</option>
+              {shiftOptions.filter((option) => option.value).map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div className="text-xs px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-700">
+            Showing assignments for Class {studentClass || '-'} | Section {studentSection || '-'} | {studentShift || '-'}
+          </div>
+        )}
 
         <div className="flex gap-2 flex-wrap">
           {['all', 'active', 'overdue', 'completed', 'draft'].map((status) => (
@@ -568,7 +642,9 @@ export default function AssignmentsPage() {
         </div>
       ) : filteredAssignments.length === 0 ? (
         <div className="bg-white rounded-xl p-8 shadow-card text-center text-sm text-gray-500">
-          No assignments found.
+          {isTeacher
+            ? 'No assignments found.'
+            : `No published assignments found for your class (${studentClass || '-'} ${studentSection || '-'}, ${studentShift || '-'}) yet.`}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -626,6 +702,15 @@ export default function AssignmentsPage() {
 
                 {isTeacher ? (
                   <div className="flex items-center justify-end gap-1">
+                    {assignment.status === 'draft' && (
+                      <button
+                        type="button"
+                        className="px-2 py-1 text-xs rounded border border-green-200 hover:border-green-300 text-green-700"
+                        onClick={() => handlePublish(assignment)}
+                      >
+                        Publish
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="px-2 py-1 text-xs rounded border border-gray-200 hover:border-primary-300 text-gray-600"
@@ -647,13 +732,21 @@ export default function AssignmentsPage() {
                   <div className="flex items-center justify-end gap-1">
                     {(() => {
                       const submissionKey = `${currentStudentKey}:${assignment.id}`;
-                      const submitted = Boolean(studentSubmissions[submissionKey]);
+                      const submission = studentSubmissions[submissionKey];
+                      const submitted = Boolean(submission);
                       const isDraft = assignment.status === 'draft';
                       return submitted ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded border border-green-200 text-green-700 bg-green-50">
-                          <HiOutlineCheckCircle className="w-3.5 h-3.5" />
-                          Submitted
-                        </span>
+                        <div className="text-right">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded border border-green-200 text-green-700 bg-green-50">
+                            <HiOutlineCheckCircle className="w-3.5 h-3.5" />
+                            Submitted
+                          </span>
+                          {submission?.fileName ? (
+                            <p className="text-[11px] text-gray-500 mt-1">
+                              File: {submission.fileName}
+                            </p>
+                          ) : null}
+                        </div>
                       ) : (
                         <button
                           type="button"
@@ -664,7 +757,12 @@ export default function AssignmentsPage() {
                               : 'border-primary-300 text-primary-700 hover:border-primary-500'
                           }`}
                           onClick={() => {
-                            if (!isDraft) handleStudentSubmit(assignment);
+                            if (!isDraft) {
+                              setSelectedAssignment(assignment);
+                              setSubmitFile(null);
+                              setSubmitNote('');
+                              setIsSubmitModalOpen(true);
+                            }
                           }}
                         >
                           Submit
@@ -870,6 +968,90 @@ export default function AssignmentsPage() {
               {editingAssignmentId ? 'Save Changes' : 'Create'}
             </Button>
           </div>
+          </form>
+        </Modal>
+      )}
+
+      {!isTeacher && (
+        <Modal
+          isOpen={isSubmitModalOpen}
+          onClose={() => {
+            if (isSubmitting) return;
+            setIsSubmitModalOpen(false);
+            setSelectedAssignment(null);
+            setSubmitFile(null);
+            setSubmitNote('');
+          }}
+          title="Submit Assignment"
+        >
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!selectedAssignment) return;
+              handleStudentSubmit(selectedAssignment);
+            }}
+            className="space-y-4"
+          >
+            <div>
+              <p className="text-sm font-medium text-gray-800">
+                {selectedAssignment?.title || 'Assignment'}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                Upload your hand-in file (PDF, DOCX, image, or ZIP).
+              </p>
+            </div>
+
+            <div>
+              <label htmlFor="assignment-submit-file" className="block text-sm font-medium text-gray-700 mb-1">
+                Submission File
+              </label>
+              <input
+                id="assignment-submit-file"
+                type="file"
+                required
+                accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.zip,.rar,image/*"
+                onChange={(e) => setSubmitFile(e.target.files?.[0] || null)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 file:mr-3 file:px-3 file:py-1.5 file:border-0 file:rounded-md file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
+              />
+              {submitFile && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Selected: {submitFile.name} ({Math.max(1, Math.round(submitFile.size / 1024))} KB)
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="assignment-submit-note" className="block text-sm font-medium text-gray-700 mb-1">
+                Note (Optional)
+              </label>
+              <textarea
+                id="assignment-submit-note"
+                rows={3}
+                value={submitNote}
+                onChange={(e) => setSubmitNote(e.target.value)}
+                placeholder="Add note for teacher..."
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setIsSubmitModalOpen(false);
+                  setSelectedAssignment(null);
+                  setSubmitFile(null);
+                  setSubmitNote('');
+                }}
+                disabled={isSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" loading={isSubmitting}>
+                Submit File
+              </Button>
+            </div>
           </form>
         </Modal>
       )}

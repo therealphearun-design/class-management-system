@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useReducer, useCallback } from 'react';
 
 import { ACCOUNT_ROLES, getRoleLabel, normalizeRole } from '../constants/roles';
+import { studentsData } from '../data/students';
+import { buildStudentPassword, normalizeStudentAccount, normalizeStudentIds } from '../utils/studentAuth';
 
 const AuthContext = createContext(null);
 const ADMIN_CENTER_EMAILS = [
@@ -9,8 +11,7 @@ const ADMIN_CENTER_EMAILS = [
   'po.phearun.2824@rupp.edu.kh',
 ];
 const ADMIN_CENTER_PASSWORD = 'Admin1234';
-const ALLOWED_STUDENT_EMAIL = 'student123@fake.com';
-const ALLOWED_STUDENT_PASSWORD = 'Studentfake';
+const LOCAL_STUDENTS_KEY = 'students_local_v2';
 
 const initialState = {
   user: null,
@@ -58,6 +59,36 @@ function normalizeUser(user) {
   };
 }
 
+function readLocalStudents() {
+  try {
+    const raw = localStorage.getItem(LOCAL_STUDENTS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function mergeUniqueStudents(items) {
+  const map = new Map();
+  items.forEach((item, index) => {
+    if (!item || typeof item !== 'object') return;
+    const idKey = item.id !== undefined && item.id !== null ? `id:${item.id}` : null;
+    const emailKey = item.email ? `email:${String(item.email).toLowerCase()}` : null;
+    const nameKey = `name:${String(item.name || '').toLowerCase()}-${String(item.class || '')}-${String(item.rollNo || index)}`;
+    const key = idKey || emailKey || nameKey;
+    map.set(key, item);
+  });
+  return Array.from(map.values());
+}
+
+function getStudentAccounts() {
+  const localStudents = readLocalStudents();
+  const merged = mergeUniqueStudents([...localStudents, ...studentsData]);
+  const withStudentIds = normalizeStudentIds(merged);
+  return withStudentIds.map((student, index) => normalizeStudentAccount(student, student.id ?? index + 1));
+}
+
 export function AuthProvider({ children }) {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
@@ -68,7 +99,7 @@ export function AuthProvider({ children }) {
       
       if (email && password) {
         const normalizedEmail = String(email).trim().toLowerCase();
-        const username = email.split('@')[0];
+        const username = normalizedEmail.split('@')[0];
         const formattedName = username
           .split(/[._-]/)
           .filter(Boolean)
@@ -76,6 +107,7 @@ export function AuthProvider({ children }) {
           .join(' ');
         const normalizedRole = normalizeRole(selectedRole);
         const isAdminCenterMember = ADMIN_CENTER_EMAILS.includes(normalizedEmail);
+        let matchedStudent = null;
 
         if (normalizedRole === ACCOUNT_ROLES.TEACHER) {
           if (!isAdminCenterMember) {
@@ -87,17 +119,20 @@ export function AuthProvider({ children }) {
         }
 
         if (normalizedRole === ACCOUNT_ROLES.STUDENT) {
-          if (normalizedEmail !== ALLOWED_STUDENT_EMAIL) {
-            throw new Error(`Student access is restricted to ${ALLOWED_STUDENT_EMAIL}.`);
+          const studentAccounts = getStudentAccounts();
+          matchedStudent = studentAccounts.find((student) => String(student.email || '').toLowerCase() === normalizedEmail);
+          if (!matchedStudent) {
+            throw new Error('Student email was not found. Please use the email from Student Lookup.');
           }
-          if (password !== ALLOWED_STUDENT_PASSWORD) {
-            throw new Error('Invalid Student password.');
+          const expectedPassword = buildStudentPassword(matchedStudent);
+          if (String(password).trim().toLowerCase() !== expectedPassword.toLowerCase()) {
+            throw new Error('Invalid student password. Use lastname + DDMMYYYY.');
           }
         }
 
         const user = {
-          id: 1,
-          name: formattedName || 'User',
+          id: matchedStudent?.id || 1,
+          name: matchedStudent?.name || formattedName || 'User',
           email: normalizedEmail,
           role: normalizedRole,
           roleLabel: isAdminCenterMember
@@ -105,7 +140,13 @@ export function AuthProvider({ children }) {
             : getRoleLabel(normalizedRole),
           isAdminCenterMember,
           phone: '',
-          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${normalizedEmail}`,
+          avatar: matchedStudent?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${normalizedEmail}`,
+          studentId: matchedStudent?.studentId || '',
+          class: matchedStudent?.class || '',
+          section: matchedStudent?.section || '',
+          shift: matchedStudent?.shift || '',
+          rollNo: matchedStudent?.rollNo ?? '',
+          dateOfBirth: matchedStudent?.dateOfBirth || '',
         };
         dispatch({ type: 'LOGIN_SUCCESS', payload: user });
         localStorage.setItem('auth_user', JSON.stringify(user));
@@ -149,12 +190,28 @@ export function AuthProvider({ children }) {
       return { success: false, error: 'No authenticated user found.' };
     }
 
+    const currentRole = normalizeRole(state.user.role);
     const nextUser = {
       ...state.user,
       ...updates,
     };
+
+    if (currentRole === ACCOUNT_ROLES.STUDENT) {
+      // Students cannot escalate role or alter identity-critical academic fields.
+      nextUser.role = ACCOUNT_ROLES.STUDENT;
+      nextUser.email = state.user.email;
+      nextUser.studentId = state.user.studentId;
+      nextUser.class = state.user.class;
+      nextUser.section = state.user.section;
+      nextUser.shift = state.user.shift;
+      nextUser.rollNo = state.user.rollNo;
+      nextUser.dateOfBirth = state.user.dateOfBirth;
+      nextUser.isAdminCenterMember = false;
+    } else {
+      nextUser.role = normalizeRole(nextUser.role);
+    }
+
     const normalizedRole = normalizeRole(nextUser.role);
-    nextUser.role = normalizedRole;
     nextUser.roleLabel = getRoleLabel(normalizedRole);
 
     if (!nextUser.avatar) {

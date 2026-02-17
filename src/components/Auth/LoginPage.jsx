@@ -101,7 +101,7 @@ export default function LoginPage() {
                 )}
                 {role === ACCOUNT_ROLES.STUDENT && (
                   <div className="mt-2 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg p-2">
-                    Student login: email `student123@fake.com` and password `Studentfake`.
+                    Student login uses your student email. Password format: `lastname + DDMMYYYY` (example: `davin17022006`).
                   </div>
                 )}
               </div>

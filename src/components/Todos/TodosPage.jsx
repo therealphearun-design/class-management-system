@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 
+import { addDays, format } from 'date-fns';
 import {
   HiOutlineCheck,
   HiOutlinePlus,
@@ -10,60 +11,127 @@ import { ACCOUNT_ROLES, normalizeRole } from '../../constants/roles';
 import { useAuth } from '../../context/AuthContext';
 import Button from '../common/Button';
 
-const STORAGE_KEY = 'cms_todos_v1';
-const teacherDefaultTodos = [
+const STORAGE_KEY = 'cms_todos_v2';
+
+const toIsoDate = (offsetDays) => format(addDays(new Date(), offsetDays), 'yyyy-MM-dd');
+
+const buildTeacherDefaultTodos = () => ([
   {
     id: 1,
-    title: 'Review attendance report for Grade 10',
+    title: 'Finalize today attendance and submit class summary',
+    category: 'Attendance',
     priority: 'High',
-    dueDate: '2026-02-13',
+    dueDate: toIsoDate(0),
     completed: false,
   },
   {
     id: 2,
-    title: 'Prepare assignment schedule for next week',
-    priority: 'Medium',
-    dueDate: '2026-02-14',
+    title: 'Publish assignment instructions for next class',
+    category: 'Assignments',
+    priority: 'High',
+    dueDate: toIsoDate(1),
     completed: false,
   },
-];
+  {
+    id: 3,
+    title: 'Review low-performing students from marksheet report',
+    category: 'Academics',
+    priority: 'Medium',
+    dueDate: toIsoDate(2),
+    completed: false,
+  },
+  {
+    id: 4,
+    title: 'Issue pending student certificates',
+    category: 'Certificates',
+    priority: 'Medium',
+    dueDate: toIsoDate(3),
+    completed: false,
+  },
+  {
+    id: 5,
+    title: 'Send weekly progress update to parents',
+    category: 'Communication',
+    priority: 'Low',
+    dueDate: toIsoDate(5),
+    completed: false,
+  },
+]);
 
-const studentDefaultTodos = [
+const buildStudentDefaultTodos = (studentClass = 'your class') => ([
   {
     id: 1,
-    title: 'Complete Mathematics assignment',
-    priority: 'High',
-    dueDate: '2026-02-16',
+    title: `Check timetable updates for ${studentClass}`,
+    category: 'Schedule',
+    priority: 'Medium',
+    dueDate: toIsoDate(0),
     completed: false,
   },
   {
     id: 2,
-    title: 'Prepare for upcoming exam schedule',
-    priority: 'Medium',
-    dueDate: '2026-02-18',
+    title: 'Submit today assignment before deadline',
+    category: 'Assignments',
+    priority: 'High',
+    dueDate: toIsoDate(1),
     completed: false,
   },
-];
+  {
+    id: 3,
+    title: 'Review marksheet and improve weakest subject',
+    category: 'Academics',
+    priority: 'High',
+    dueDate: toIsoDate(2),
+    completed: false,
+  },
+  {
+    id: 4,
+    title: 'Prepare notes for upcoming exam topics',
+    category: 'Exams',
+    priority: 'Medium',
+    dueDate: toIsoDate(3),
+    completed: false,
+  },
+  {
+    id: 5,
+    title: 'Update your profile and contact details',
+    category: 'Profile',
+    priority: 'Low',
+    dueDate: toIsoDate(7),
+    completed: false,
+  },
+]);
 
-function getInitialTodos(role) {
+function getInitialTodos(role, user) {
   const storageKey = `${STORAGE_KEY}_${role}`;
   const saved = localStorage.getItem(storageKey);
-  if (!saved) return role === ACCOUNT_ROLES.STUDENT ? studentDefaultTodos : teacherDefaultTodos;
+  if (!saved) {
+    return role === ACCOUNT_ROLES.STUDENT
+      ? buildStudentDefaultTodos(user?.class)
+      : buildTeacherDefaultTodos();
+  }
   try {
     const parsed = JSON.parse(saved);
-    if (Array.isArray(parsed)) return parsed;
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => ({
+        ...item,
+        category: item.category || 'General',
+      }));
+    }
   } catch {
     // Ignore parse errors and fallback below.
   }
-  return role === ACCOUNT_ROLES.STUDENT ? studentDefaultTodos : teacherDefaultTodos;
+  return role === ACCOUNT_ROLES.STUDENT
+    ? buildStudentDefaultTodos(user?.class)
+    : buildTeacherDefaultTodos();
 }
 
 export default function TodosPage() {
   const { user } = useAuth();
   const role = normalizeRole(user?.role);
   const isStudent = role === ACCOUNT_ROLES.STUDENT;
-  const [todos, setTodos] = useState(() => getInitialTodos(role));
+  const [todos, setTodos] = useState(() => getInitialTodos(role, user));
   const [title, setTitle] = useState('');
+  const [category, setCategory] = useState('General');
   const [priority, setPriority] = useState('Medium');
   const [dueDate, setDueDate] = useState('');
 
@@ -87,6 +155,7 @@ export default function TodosPage() {
       {
         id: Date.now(),
         title: title.trim(),
+        category,
         priority,
         dueDate: dueDate || null,
         completed: false,
@@ -95,6 +164,7 @@ export default function TodosPage() {
     ];
     persist(nextTodos);
     setTitle('');
+    setCategory('General');
     setPriority('Medium');
     setDueDate('');
   };
@@ -116,14 +186,27 @@ export default function TodosPage() {
     persist(nextTodos);
   };
 
+  const sortedTodos = useMemo(() => {
+    const priorityScore = { High: 0, Medium: 1, Low: 2 };
+    return [...todos].sort((left, right) => {
+      if (left.completed !== right.completed) return left.completed ? 1 : -1;
+      const leftDue = left.dueDate || '9999-12-31';
+      const rightDue = right.dueDate || '9999-12-31';
+      if (leftDue !== rightDue) return leftDue.localeCompare(rightDue);
+      const leftPriority = priorityScore[left.priority] ?? 3;
+      const rightPriority = priorityScore[right.priority] ?? 3;
+      return leftPriority - rightPriority;
+    });
+  }, [todos]);
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-800">To Do List</h1>
         <p className="text-sm text-gray-500 mt-1">
           {isStudent
-            ? 'Track your assignment and exam preparation tasks.'
-            : 'Track administrative work and daily teaching tasks.'}
+            ? 'Track real study workflow: class schedule, assignments, and exam preparation.'
+            : 'Track real operational work: attendance, assignments, reports, and communication.'}
         </p>
       </div>
 
@@ -144,7 +227,7 @@ export default function TodosPage() {
 
       <div className="bg-white rounded-xl shadow-card p-6">
         <h2 className="font-semibold text-gray-800 mb-4">Add Task</h2>
-        <form onSubmit={addTodo} className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <form onSubmit={addTodo} className="grid grid-cols-1 sm:grid-cols-5 gap-3">
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -152,6 +235,21 @@ export default function TodosPage() {
             className="sm:col-span-2 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             required
           />
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
+            <option>General</option>
+            <option>Attendance</option>
+            <option>Assignments</option>
+            <option>Academics</option>
+            <option>Exams</option>
+            <option>Schedule</option>
+            <option>Certificates</option>
+            <option>Communication</option>
+            <option>Profile</option>
+          </select>
           <select
             value={priority}
             onChange={(e) => setPriority(e.target.value)}
@@ -167,7 +265,7 @@ export default function TodosPage() {
             onChange={(e) => setDueDate(e.target.value)}
             className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
-          <div className="sm:col-span-4 flex justify-end">
+          <div className="sm:col-span-5 flex justify-end">
             <Button type="submit" icon={HiOutlinePlus}>Add Task</Button>
           </div>
         </form>
@@ -185,7 +283,7 @@ export default function TodosPage() {
           {todos.length === 0 ? (
             <p className="text-sm text-gray-500">No tasks yet.</p>
           ) : (
-            todos.map((item) => (
+            sortedTodos.map((item) => (
               <div
                 key={item.id}
                 className="border border-gray-100 rounded-lg p-3 bg-gray-50 flex items-center justify-between gap-3"
@@ -195,6 +293,7 @@ export default function TodosPage() {
                     {item.title}
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
+                    Category: {item.category || 'General'} |{' '}
                     Priority: {item.priority}
                     {item.dueDate ? ` | Due: ${item.dueDate}` : ''}
                   </p>

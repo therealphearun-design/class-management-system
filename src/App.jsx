@@ -15,6 +15,7 @@ import MessagesPage from './components/Messages/MessagesPage';
 import ProfilePage from './components/Profile/ProfilePage';
 import ReportsPage from './components/Reports/ReportsPage';
 import SchedulePage from './components/Schedule/SchedulePage';
+import StudentLookupPage from './components/Students/StudentLookupPage';
 import StudentsPage from './components/Students/StudentsPage';
 import TodosPage from './components/Todos/TodosPage';
 import { ACCOUNT_ROLES, getRoleHomePath, normalizeRole } from './constants/roles';
@@ -84,6 +85,13 @@ function AppRoutes() {
         <PrivateRoute allowedRoles={[ACCOUNT_ROLES.TEACHER]}>
           <Layout>
             <StudentsPage />
+          </Layout>
+        </PrivateRoute>
+      } />
+      <Route path="/student-lookup" element={
+        <PrivateRoute allowedRoles={[ACCOUNT_ROLES.TEACHER]}>
+          <Layout>
+            <StudentLookupPage />
           </Layout>
         </PrivateRoute>
       } />

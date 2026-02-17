@@ -1,9 +1,23 @@
 import React, { useState } from 'react';
 
+import { HiOutlineAcademicCap, HiOutlineCalendar, HiOutlineIdentification, HiOutlineMail, HiOutlinePhone, HiOutlineUser } from 'react-icons/hi';
+
 import { ACCOUNT_ROLES, ROLE_CAPABILITIES, ROLE_LABELS, normalizeRole } from '../../constants/roles';
 import { useAuth } from '../../context/AuthContext';
 import Avatar from '../common/Avatar';
 import Button from '../common/Button';
+
+function InfoCard({ icon: Icon, label, value }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+      <div className="flex items-center gap-2 text-xs text-gray-500">
+        <Icon className="w-4 h-4" />
+        <span>{label}</span>
+      </div>
+      <p className="mt-1 text-sm font-semibold text-gray-800 break-all">{value || '-'}</p>
+    </div>
+  );
+}
 
 export default function ProfilePage() {
   const { user, updateProfile } = useAuth();
@@ -24,6 +38,20 @@ export default function ProfilePage() {
   const previewAvatar = avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profileSeed}`;
   const currentRole = normalizeRole(valueFor('role') || user?.role);
   const roleCapabilities = ROLE_CAPABILITIES[currentRole] || [];
+  const isStudent = currentRole === ACCOUNT_ROLES.STUDENT;
+
+  const profileCards = [
+    { icon: HiOutlineMail, label: 'Email', value: textValue('email') },
+    { icon: HiOutlinePhone, label: 'Phone', value: textValue('phone') },
+    { icon: HiOutlineUser, label: 'Role', value: ROLE_LABELS[currentRole] },
+    ...(isStudent
+      ? [
+          { icon: HiOutlineIdentification, label: 'Student ID', value: textValue('studentId') },
+          { icon: HiOutlineAcademicCap, label: 'Class', value: `${textValue('class')} ${textValue('section')}`.trim() },
+          { icon: HiOutlineCalendar, label: 'Date of Birth', value: textValue('dateOfBirth') },
+        ]
+      : []),
+  ];
 
   const onChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -67,6 +95,7 @@ export default function ProfilePage() {
         role: normalizeRole(valueFor('role')),
         phone: textValue('phone').trim(),
         avatar: textValue('avatar').trim(),
+        dateOfBirth: textValue('dateOfBirth').trim(),
       });
 
       if (result.success) {
@@ -78,6 +107,7 @@ export default function ProfilePage() {
     } catch (_error) {
       setMessage({ type: 'error', text: 'Unable to update profile.' });
     }
+
     setIsSaving(false);
     setTimeout(() => setMessage(null), 3000);
   };
@@ -96,34 +126,52 @@ export default function ProfilePage() {
         </div>
       )}
 
-      <div>
-        <h1 className="text-2xl font-bold text-gray-800">My Profile</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Update your own account information.
-        </p>
+      <div className="bg-white rounded-2xl shadow-card p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <Avatar name={valueFor('name', 'User')} src={previewAvatar} size="xl" />
+            <div>
+              <h1 className="text-2xl font-bold text-gray-800">{valueFor('name', 'User')}</h1>
+              <p className="text-sm text-gray-500">{textValue('email', 'No email')}</p>
+              <p className="text-xs mt-1 inline-flex items-center px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                {ROLE_LABELS[currentRole]} Account
+              </p>
+            </div>
+          </div>
+          <div className="text-xs text-gray-500 max-w-xs">
+            Manage your account information and update your profile details.
+          </div>
+        </div>
+
+        <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {profileCards.map((card) => (
+            <InfoCard
+              key={`${card.label}-${card.value}`}
+              icon={card.icon}
+              label={card.label}
+              value={card.value}
+            />
+          ))}
+        </div>
       </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
         <h2 className="text-sm font-semibold text-blue-800">
           {ROLE_LABELS[currentRole]} Account Capabilities
         </h2>
-        <ul className="mt-2 space-y-1 text-sm text-blue-700">
+        <div className="mt-2 flex flex-wrap gap-2">
           {roleCapabilities.map((capability) => (
-            <li key={capability}>• {capability}</li>
+            <span key={capability} className="text-xs px-2 py-1 rounded-md bg-white border border-blue-100 text-blue-700">
+              {capability}
+            </span>
           ))}
-        </ul>
+        </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-card p-6">
-        <div className="flex items-center gap-4 mb-6">
-          <Avatar name={valueFor('name', 'User')} src={previewAvatar} size="lg" />
-          <div>
-            <p className="text-lg font-semibold text-gray-800">{valueFor('name', 'User')}</p>
-            <p className="text-sm text-gray-500">{valueFor('email', 'No email')}</p>
-          </div>
-        </div>
+      <div className="bg-white rounded-2xl shadow-card p-6">
+        <h2 className="text-lg font-semibold text-gray-800">Edit Profile</h2>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 mt-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label htmlFor="profile-name" className="block text-sm font-medium text-gray-700 mb-1">
@@ -147,27 +195,16 @@ export default function ProfilePage() {
                 type="email"
                 value={textValue('email')}
                 onChange={(e) => onChange('email', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                readOnly={isStudent}
+                className={`w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 ${
+                  isStudent ? 'bg-gray-50 text-gray-600 cursor-not-allowed' : ''
+                }`}
                 required
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="profile-role" className="block text-sm font-medium text-gray-700 mb-1">
-                Role
-              </label>
-              <select
-                id="profile-role"
-                value={normalizeRole(valueFor('role'))}
-                onChange={(e) => onChange('role', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
-              >
-                <option value={ACCOUNT_ROLES.STUDENT}>{ROLE_LABELS[ACCOUNT_ROLES.STUDENT]}</option>
-                <option value={ACCOUNT_ROLES.TEACHER}>{ROLE_LABELS[ACCOUNT_ROLES.TEACHER]}</option>
-              </select>
-            </div>
             <div>
               <label htmlFor="profile-phone" className="block text-sm font-medium text-gray-700 mb-1">
                 Phone
@@ -180,7 +217,54 @@ export default function ProfilePage() {
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
             </div>
+
+            <div>
+              <label htmlFor="profile-role" className="block text-sm font-medium text-gray-700 mb-1">
+                Role
+              </label>
+              <select
+                id="profile-role"
+                value={normalizeRole(valueFor('role'))}
+                onChange={(e) => onChange('role', e.target.value)}
+                disabled={isStudent}
+                className={`w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white ${
+                  isStudent ? 'bg-gray-50 text-gray-600 cursor-not-allowed' : ''
+                }`}
+              >
+                <option value={ACCOUNT_ROLES.STUDENT}>{ROLE_LABELS[ACCOUNT_ROLES.STUDENT]}</option>
+                <option value={ACCOUNT_ROLES.TEACHER}>{ROLE_LABELS[ACCOUNT_ROLES.TEACHER]}</option>
+              </select>
+            </div>
           </div>
+
+          {isStudent && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="profile-dob" className="block text-sm font-medium text-gray-700 mb-1">
+                  Date of Birth
+                </label>
+                <input
+                  id="profile-dob"
+                  type="date"
+                  value={textValue('dateOfBirth')}
+                  onChange={(e) => onChange('dateOfBirth', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="profile-student-id" className="block text-sm font-medium text-gray-700 mb-1">
+                  Student ID
+                </label>
+                <input
+                  id="profile-student-id"
+                  type="text"
+                  value={textValue('studentId')}
+                  readOnly
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-600"
+                />
+              </div>
+            </div>
+          )}
 
           <div>
             <label htmlFor="profile-avatar" className="block text-sm font-medium text-gray-700 mb-1">
@@ -211,9 +295,7 @@ export default function ProfilePage() {
           </div>
 
           <div className="flex justify-end">
-            <Button type="submit" loading={isSaving}>
-              Save Profile
-            </Button>
+            <Button type="submit" loading={isSaving}>Save Profile</Button>
           </div>
         </form>
       </div>

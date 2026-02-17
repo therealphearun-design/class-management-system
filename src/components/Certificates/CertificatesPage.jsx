@@ -88,23 +88,126 @@ const normalizeCertificate = (certificate, studentsById) => {
   };
 };
 
-function createDownloadBlob(certificate) {
+const toPdfSafeText = (value) => String(value ?? '')
+  .replace(/[^\x20-\x7E]/g, '?')
+  .replace(/\\/g, '\\\\')
+  .replace(/\(/g, '\\(')
+  .replace(/\)/g, '\\)');
+
+const buildTextCommand = (text, fontSize, x, y) => (
+  `BT /F1 ${fontSize} Tf 1 0 0 1 ${x.toFixed(2)} ${y.toFixed(2)} Tm (${toPdfSafeText(text)}) Tj ET`
+);
+
+const buildCenteredTextCommand = (text, fontSize, y, pageWidth) => {
+  const roughTextWidth = Math.max(0, String(text).length * fontSize * 0.5);
+  const x = (pageWidth - roughTextWidth) / 2;
+  return buildTextCommand(text, fontSize, x, y);
+};
+
+const wrapPdfText = (text, fontSize, maxWidth) => {
+  const normalized = String(text || '').trim().replace(/\s+/g, ' ');
+  if (!normalized) return ['-'];
+
+  const maxChars = Math.max(10, Math.floor(maxWidth / (fontSize * 0.5)));
+  const words = normalized.split(' ');
+  const lines = [];
+  let current = '';
+
+  words.forEach((word) => {
+    if (!current) {
+      current = word;
+      return;
+    }
+
+    const candidate = `${current} ${word}`;
+    if (candidate.length <= maxChars) {
+      current = candidate;
+      return;
+    }
+
+    lines.push(current);
+    current = word;
+  });
+
+  if (current) lines.push(current);
+  return lines;
+};
+
+function createCertificatePdfBlob(certificate) {
+  const pageWidth = 595.28; // A4 portrait width in points
+
+  let issueDateLabel = '-';
+  if (certificate.issueDate) {
+    const parsedDate = new Date(certificate.issueDate);
+    if (!Number.isNaN(parsedDate.getTime())) {
+      issueDateLabel = format(parsedDate, 'dd MMMM yyyy');
+    }
+  }
+
+  const studentName = certificate.studentName || 'Student Name';
+  const classLabel = `${certificate.classCode || '-'} ${certificate.section || ''}`.trim();
+  const shiftLabel = certificate.shift || '-';
+  const gradeLabel = certificate.grade || '-';
+  const certificateType = certificate.certificateType || 'Certificate';
+  const description = certificate.description || '-';
+  const nameFontSize = Math.max(22, Math.min(30, 340 / Math.max(1, String(studentName).length * 0.5)));
+  const detailLines = wrapPdfText(`Description: ${description}`, 11, 430);
+
   const lines = [
-    'Class Management System',
-    'Student Certificate',
-    '',
-    `Student: ${certificate.studentName}`,
-    `Class: ${certificate.classCode || '-'}  Section: ${certificate.section || '-'}  Shift: ${certificate.shift || '-'}`,
-    `Type: ${certificate.certificateType}`,
-    `Grade: ${certificate.grade}`,
-    `Status: ${certificate.status}`,
-    `Issue Date: ${certificate.issueDate || '-'}`,
-    '',
-    'Description:',
-    certificate.description || '-',
+    '0.78 0.58 0.16 RG 3 w 28 28 539.28 785.89 re S',
+    '0.78 0.58 0.16 RG 1.2 w 45 45 505.28 751.89 re S',
+    buildCenteredTextCommand('CLASS MANAGEMENT SCHOOL', 24, 750, pageWidth),
+    buildCenteredTextCommand('OFFICIAL STUDENT CERTIFICATE', 15, 720, pageWidth),
+    buildCenteredTextCommand('This certificate is proudly presented to', 13, 660, pageWidth),
+    buildCenteredTextCommand(studentName, nameFontSize, 610, pageWidth),
+    buildCenteredTextCommand(
+      `for ${certificateType.toLowerCase()} and outstanding performance.`,
+      14,
+      570,
+      pageWidth
+    ),
+    buildCenteredTextCommand(
+      `Class: ${classLabel}   Shift: ${shiftLabel}   Grade: ${gradeLabel}`,
+      12,
+      540,
+      pageWidth
+    ),
+    buildTextCommand(`Issue Date: ${issueDateLabel}`, 11, 80, 460),
+    buildTextCommand('School Principal', 11, 90, 250),
+    buildTextCommand('Class Teacher', 11, 410, 250),
+    '0 G 1 w 80 265 m 230 265 l S',
+    '0 G 1 w 365 265 m 515 265 l S',
+  ];
+  detailLines.forEach((line, index) => {
+    lines.splice(9 + index, 0, buildTextCommand(line, 11, 80, 500 - (index * 16)));
+  });
+
+  const contentStream = lines.join('\n');
+  const streamObject = `<< /Length ${contentStream.length} >>\nstream\n${contentStream}\nendstream`;
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
+    streamObject,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >>',
   ];
 
-  return new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  for (let index = 0; index < objects.length; index += 1) {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${objects[index]}\nendobj\n`;
+  }
+
+  const xrefStart = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n`;
+  pdf += '0000000000 65535 f \n';
+  for (let index = 1; index <= objects.length; index += 1) {
+    pdf += `${String(offsets[index]).padStart(10, '0')} 00000 n \n`;
+  }
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+
+  return new Blob([pdf], { type: 'application/pdf' });
 }
 
 export default function CertificatesPage() {
@@ -115,6 +218,8 @@ export default function CertificatesPage() {
   const [certificates, setCertificates] = useState([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [studentClassFilter, setStudentClassFilter] = useState('all');
+  const [studentSearch, setStudentSearch] = useState('');
   const [notification, setNotification] = useState(null);
   const [formData, setFormData] = useState({
     studentId: '',
@@ -209,6 +314,21 @@ export default function CertificatesPage() {
     () => students.find((student) => String(student.id) === String(formData.studentId)) || null,
     [formData.studentId, students]
   );
+  const classFilterOptions = useMemo(() => {
+    const classes = Array.from(new Set(students.map((student) => String(student.class || '').trim()).filter(Boolean)))
+      .sort((left, right) => left.localeCompare(right));
+    return [{ value: 'all', label: 'All classes' }, ...classes.map((item) => ({ value: item, label: item }))];
+  }, [students]);
+
+  const visibleStudents = useMemo(() => {
+    const query = studentSearch.trim().toLowerCase();
+    return students.filter((student) => {
+      const matchesClass = studentClassFilter === 'all' || student.class === studentClassFilter;
+      if (!matchesClass) return false;
+      if (!query) return true;
+      return String(student.name || '').toLowerCase().includes(query);
+    });
+  }, [students, studentClassFilter, studentSearch]);
 
   const issueCertificate = async (id) => {
     const target = certificates.find((certificate) => String(certificate.id) === String(id));
@@ -315,6 +435,8 @@ export default function CertificatesPage() {
     } finally {
       setIsSaving(false);
       setShowCreateModal(false);
+      setStudentClassFilter('all');
+      setStudentSearch('');
       setFormData({
         studentId: '',
         certificateType: 'Achievement',
@@ -342,14 +464,14 @@ export default function CertificatesPage() {
       // Fallback to local download below.
     }
 
-    const blob = createDownloadBlob(certificate);
+    const blob = createCertificatePdfBlob(certificate);
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `certificate-${certificate.studentName.replace(/\s+/g, '-').toLowerCase()}.txt`;
+    a.download = `certificate-${certificate.studentName.replace(/\s+/g, '-').toLowerCase()}.pdf`;
     a.click();
     window.URL.revokeObjectURL(url);
-    notify('success', `Downloaded local certificate file for ${certificate.studentName}.`);
+    notify('success', `Downloaded local PDF certificate for ${certificate.studentName}.`);
   };
 
   const sendCertificateEmail = async (certificate) => {
@@ -626,8 +748,49 @@ export default function CertificatesPage() {
       >
         <form onSubmit={handleCreate} className="space-y-4">
           <div>
+            <label htmlFor="cert-class-filter" className="block text-sm font-medium text-gray-700 mb-1">
+              Class
+            </label>
+            <select
+              id="cert-class-filter"
+              value={studentClassFilter}
+              onChange={(e) => {
+                const nextClass = e.target.value;
+                setStudentClassFilter(nextClass);
+                setFormData((prev) => {
+                  if (!prev.studentId) return prev;
+                  const selected = students.find((student) => String(student.id) === String(prev.studentId));
+                  if (!selected) return { ...prev, studentId: '' };
+                  const stillVisible = nextClass === 'all' || selected.class === nextClass;
+                  return stillVisible ? prev : { ...prev, studentId: '' };
+                });
+              }}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              {classFilterOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="cert-student-search" className="block text-sm font-medium text-gray-700 mb-1">
+              Search Student
+            </label>
+            <input
+              id="cert-student-search"
+              value={studentSearch}
+              onChange={(e) => setStudentSearch(e.target.value)}
+              placeholder="Type student name"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </div>
+
+          <div>
             <label htmlFor="cert-student" className="block text-sm font-medium text-gray-700 mb-1">
-              Student
+              Student ({visibleStudents.length})
             </label>
             <select
               id="cert-student"
@@ -637,7 +800,7 @@ export default function CertificatesPage() {
               required
             >
               <option value="">Select student</option>
-              {students.map((student) => (
+              {visibleStudents.map((student) => (
                 <option key={student.id} value={student.id}>
                   {student.name} - {student.class} {student.section} ({student.shift})
                 </option>
