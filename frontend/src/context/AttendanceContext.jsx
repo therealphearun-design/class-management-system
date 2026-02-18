@@ -152,46 +152,6 @@ function buildAttendanceExcelBlob({
   return new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
 }
 
-function buildAttendanceCsvBlob({
-  currentDate,
-  selectedClass,
-  selectedSubject,
-  selectedShift,
-  students,
-  dateRecords,
-}) {
-  const statusShortMap = {
-    present: 'P',
-    absent: 'A',
-    late: 'L',
-    unmarked: 'U',
-  };
-  const toShortStatus = (status) => statusShortMap[String(status || 'unmarked').toLowerCase()] || 'U';
-  const escapeCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
-
-  const rows = students.map((student) => [
-    student.rollNo,
-    student.name,
-    student.class,
-    student.shift || 'Morning',
-    toShortStatus(dateRecords[student.id]),
-  ]);
-
-  const csvContent = [
-    ['Date', format(currentDate, 'yyyy-MM-dd')],
-    ['Class', selectedClass || 'All'],
-    ['Shift', selectedShift || 'All'],
-    ['Subject', selectedSubject || 'All'],
-    [],
-    ['Roll No', 'Student Name', 'Class', 'Shift', 'Status'],
-    ...rows,
-  ]
-    .map((line) => line.map(escapeCell).join(','))
-    .join('\n');
-
-  return new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-}
-
 function toShortToken(value, maxLen = 5) {
   const normalized = String(value || 'all')
     .toLowerCase()
@@ -250,17 +210,8 @@ export function AttendanceProvider({ children }) {
       }
 
       let excelSent = false;
-      let csvSent = false;
       if (scopedStudents.length > 0) {
         const excelBlob = buildAttendanceExcelBlob({
-          currentDate: state.currentDate,
-          selectedClass: state.selectedClass,
-          selectedSubject: state.selectedSubject,
-          selectedShift: state.selectedShift,
-          students: scopedStudents,
-          dateRecords,
-        });
-        const csvBlob = buildAttendanceCsvBlob({
           currentDate: state.currentDate,
           selectedClass: state.selectedClass,
           selectedSubject: state.selectedSubject,
@@ -283,33 +234,20 @@ export function AttendanceProvider({ children }) {
 
         const excelFormData = new FormData();
         excelFormData.append('file', excelBlob, `${baseName}.xls`);
-        excelFormData.append('caption', `${caption} | File: XLS`);
-
-        const csvFormData = new FormData();
-        csvFormData.append('file', csvBlob, `${baseName}.csv`);
-        csvFormData.append('caption', `${caption} | File: CSV`);
-
-        const sendTasks = [
-          attendanceAPI.sendTelegramReport(excelFormData),
-          attendanceAPI.sendTelegramReport(csvFormData),
-        ];
+        excelFormData.append('caption', caption);
         try {
-          const results = await Promise.allSettled(sendTasks);
-          excelSent = results[0].status === 'fulfilled';
-          csvSent = results[1].status === 'fulfilled';
+          await attendanceAPI.sendTelegramReport(excelFormData);
+          excelSent = true;
         } catch (_sendError) {
           excelSent = false;
-          csvSent = false;
         }
       }
 
       dispatch({ type: 'SET_NOTIFICATION', payload: { 
         type: 'success', 
-        message: excelSent && csvSent
-          ? `Attendance submitted successfully! (${markedCount} marked). Excel and CSV sent to Admin Center Telegram.`
-          : excelSent || csvSent
-            ? `Attendance submitted successfully! (${markedCount} marked). One file sent to Telegram, one failed.`
-            : `Attendance submitted successfully! (${markedCount} marked). Telegram send failed.`
+        message: excelSent
+          ? `Attendance submitted successfully! (${markedCount} marked). Excel sent to Admin Center Telegram.`
+          : `Attendance submitted successfully! (${markedCount} marked). Telegram send failed.`
       }});
     } catch (error) {
       dispatch({ type: 'SET_NOTIFICATION', payload: { 
