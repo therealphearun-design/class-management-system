@@ -210,6 +210,7 @@ export function AttendanceProvider({ children }) {
       }
 
       let excelSent = false;
+      let telegramFailureMessage = '';
       if (scopedStudents.length > 0) {
         const excelBlob = buildAttendanceExcelBlob({
           currentDate: state.currentDate,
@@ -238,8 +239,12 @@ export function AttendanceProvider({ children }) {
         try {
           await attendanceAPI.sendTelegramReport(excelFormData);
           excelSent = true;
-        } catch (_sendError) {
+        } catch (sendError) {
           excelSent = false;
+          telegramFailureMessage =
+            sendError?.response?.data?.message ||
+            sendError?.message ||
+            'Telegram send failed';
         }
       }
 
@@ -247,7 +252,7 @@ export function AttendanceProvider({ children }) {
         type: 'success', 
         message: excelSent
           ? `Attendance submitted successfully! (${markedCount} marked). Excel sent to Admin Center Telegram.`
-          : `Attendance submitted successfully! (${markedCount} marked). Telegram send failed.`
+          : `Attendance submitted successfully! (${markedCount} marked). Telegram send failed: ${telegramFailureMessage}.`
       }});
     } catch (error) {
       dispatch({ type: 'SET_NOTIFICATION', payload: { 
