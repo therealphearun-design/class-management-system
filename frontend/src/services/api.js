@@ -17,6 +17,7 @@ function getDefaultApiBaseUrl() {
 
 const API_BASE_URL = (process.env.REACT_APP_API_URL || getDefaultApiBaseUrl()).replace(/\/+$/, '');
 const TELEGRAM_REPORT_URL = `${API_BASE_URL}/attendance/telegram-report`;
+const TELEGRAM_REPORT_PROXY_URL = '/api/attendance/telegram-report';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -93,20 +94,33 @@ export const attendanceAPI = {
   getStats: (params) => api.get('/attendance/stats', { params }),
   export: (params) => api.get('/attendance/export', { params, responseType: 'blob' }),
   sendTelegramReport: async (data) => {
-    const response = await fetch(TELEGRAM_REPORT_URL, {
-      method: 'POST',
-      body: data,
-      mode: 'cors',
-      credentials: 'omit',
-    });
+    const post = async (url) => {
+      const response = await fetch(url, {
+        method: 'POST',
+        body: data,
+        mode: 'cors',
+        credentials: 'omit',
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const error = new Error(payload?.message || 'Telegram report upload failed');
+        error.response = { data: payload, status: response.status };
+        throw error;
+      }
+      return payload;
+    };
 
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const error = new Error(payload?.message || 'Telegram report upload failed');
-      error.response = { data: payload, status: response.status };
-      throw error;
+    try {
+      return await post(TELEGRAM_REPORT_URL);
+    } catch (error) {
+      const isNetworkFailure =
+        error?.name === 'TypeError' ||
+        /failed to fetch/i.test(String(error?.message || ''));
+      if (!isNetworkFailure) {
+        throw error;
+      }
+      return post(TELEGRAM_REPORT_PROXY_URL);
     }
-    return payload;
   },
 };
 
