@@ -29,4 +29,24 @@ npm test -- --watchAll=false
 
 ## Backend
 
-`backend/` is ready for server implementation (for example Node.js + Express).
+Setup:
+
+```bash
+cd backend
+npm install
+copy .env.example .env
+npm start
+```
+
+Environment variables:
+
+- `TELEGRAM_BOT_TOKEN` Telegram bot token
+- `TELEGRAM_ADMIN_CHAT_ID` Target Admin Center chat/group ID
+
+Implemented endpoint:
+
+- `POST /api/attendance/telegram-report` (multipart)
+  - `file`: attendance excel file (`.xls`/`.xlsx`)
+  - `caption`: optional message text
+- `GET /api/telegram/chat-id-candidates`
+  - Returns discovered chat IDs from bot `getUpdates`

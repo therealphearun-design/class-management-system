@@ -14,7 +14,7 @@ const StudentListItem = memo(function StudentListItem({ student }) {
         <div>
           <h3 className="text-sm font-semibold text-gray-800">{student.name}</h3>
           <p className="text-xs text-gray-400">
-            Roll #{student.rollNo} | {student.class}-{student.section} | {student.shift || 'Morning'}
+            Roll #{student.rollNo} | {student.class} | {student.shift || 'Morning'}
           </p>
         </div>
       </div>

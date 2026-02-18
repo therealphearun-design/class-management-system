@@ -2,6 +2,8 @@ import React, { createContext, useContext, useReducer, useCallback, useEffect } 
 
 import { format } from 'date-fns';
 
+import { attendanceAPI } from '../services/api';
+
 const AttendanceContext = createContext(null);
 const ATTENDANCE_STORAGE_KEY = 'attendance_records_v1';
 
@@ -10,7 +12,6 @@ const initialState = {
   currentDate: new Date(),
   selectedClass: '',
   selectedSubject: '',
-  selectedSection: '',
   selectedShift: '',
   viewMode: 'grid',
   isSubmitting: false,
@@ -83,6 +84,121 @@ function attendanceReducer(state, action) {
   }
 }
 
+function buildAttendanceExcelBlob({
+  currentDate,
+  selectedClass,
+  selectedSubject,
+  selectedShift,
+  students,
+  dateRecords,
+}) {
+  const statusShortMap = {
+    present: 'P',
+    absent: 'A',
+    late: 'L',
+    unmarked: 'U',
+  };
+  const toShortStatus = (status) => statusShortMap[String(status || 'unmarked').toLowerCase()] || 'U';
+
+  const escapeHtml = (value) =>
+    String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+  const rows = students
+    .map(
+      (student) => `
+        <tr>
+          <td>${escapeHtml(student.rollNo)}</td>
+          <td>${escapeHtml(student.name)}</td>
+          <td>${escapeHtml(student.class)}</td>
+          <td>${escapeHtml(student.shift || 'Morning')}</td>
+          <td>${escapeHtml(toShortStatus(dateRecords[student.id]))}</td>
+        </tr>
+      `
+    )
+    .join('');
+
+  const html = `
+    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
+    <head>
+      <meta charset="UTF-8" />
+    </head>
+    <body>
+      <table border="1">
+        <tr><th>Date</th><td>${escapeHtml(format(currentDate, 'yyyy-MM-dd'))}</td></tr>
+        <tr><th>Class</th><td>${escapeHtml(selectedClass || 'All')}</td></tr>
+        <tr><th>Shift</th><td>${escapeHtml(selectedShift || 'All')}</td></tr>
+        <tr><th>Subject</th><td>${escapeHtml(selectedSubject || 'All')}</td></tr>
+      </table>
+      <br />
+      <table border="1">
+        <tr>
+          <th>Roll No</th>
+          <th>Student Name</th>
+          <th>Class</th>
+          <th>Shift</th>
+          <th>Status</th>
+        </tr>
+        ${rows}
+      </table>
+    </body>
+    </html>
+  `;
+
+  return new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+}
+
+function buildAttendanceCsvBlob({
+  currentDate,
+  selectedClass,
+  selectedSubject,
+  selectedShift,
+  students,
+  dateRecords,
+}) {
+  const statusShortMap = {
+    present: 'P',
+    absent: 'A',
+    late: 'L',
+    unmarked: 'U',
+  };
+  const toShortStatus = (status) => statusShortMap[String(status || 'unmarked').toLowerCase()] || 'U';
+  const escapeCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+
+  const rows = students.map((student) => [
+    student.rollNo,
+    student.name,
+    student.class,
+    student.shift || 'Morning',
+    toShortStatus(dateRecords[student.id]),
+  ]);
+
+  const csvContent = [
+    ['Date', format(currentDate, 'yyyy-MM-dd')],
+    ['Class', selectedClass || 'All'],
+    ['Shift', selectedShift || 'All'],
+    ['Subject', selectedSubject || 'All'],
+    [],
+    ['Roll No', 'Student Name', 'Class', 'Shift', 'Status'],
+    ...rows,
+  ]
+    .map((line) => line.map(escapeCell).join(','))
+    .join('\n');
+
+  return new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+}
+
+function toShortToken(value, maxLen = 5) {
+  const normalized = String(value || 'all')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+  return (normalized || 'all').slice(0, maxLen);
+}
+
 export function AttendanceProvider({ children }) {
   const [state, dispatch] = useReducer(
     attendanceReducer,
@@ -118,7 +234,7 @@ export function AttendanceProvider({ children }) {
     dispatch({ type: 'SET_VIEW_MODE', payload: mode });
   }, []);
 
-  const submitAttendance = useCallback(async (studentIds = []) => {
+  const submitAttendance = useCallback(async (studentIds = [], students = []) => {
     dispatch({ type: 'SET_SUBMITTING', payload: true });
     try {
       const dateKey = format(state.currentDate, 'yyyy-MM-dd');
@@ -127,15 +243,73 @@ export function AttendanceProvider({ children }) {
         ? studentIds
         : Object.keys(dateRecords);
       const markedCount = scopedIds.filter((id) => dateRecords[id]).length;
+      const scopedStudents = students.filter((student) => scopedIds.includes(student.id));
 
       if (markedCount === 0) {
         throw new Error('Please mark at least one student before submitting.');
       }
 
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      let excelSent = false;
+      let csvSent = false;
+      if (scopedStudents.length > 0) {
+        const excelBlob = buildAttendanceExcelBlob({
+          currentDate: state.currentDate,
+          selectedClass: state.selectedClass,
+          selectedSubject: state.selectedSubject,
+          selectedShift: state.selectedShift,
+          students: scopedStudents,
+          dateRecords,
+        });
+        const csvBlob = buildAttendanceCsvBlob({
+          currentDate: state.currentDate,
+          selectedClass: state.selectedClass,
+          selectedSubject: state.selectedSubject,
+          selectedShift: state.selectedShift,
+          students: scopedStudents,
+          dateRecords,
+        });
+        const now = new Date();
+        const classToken = toShortToken(state.selectedClass || 'all', 6);
+        const subjectToken = toShortToken(state.selectedSubject || 'all', 5);
+        const shiftMap = {
+          morning: 'm',
+          afternoon: 'a',
+        };
+        const shiftToken = shiftMap[toShortToken(state.selectedShift || 'all', 9)] || toShortToken(state.selectedShift || 'all', 1);
+        const timeToken = format(now, 'HHmm');
+        const dateToken = format(state.currentDate, 'yyMMdd');
+        const baseName = `${classToken}-${subjectToken}-${shiftToken}-${timeToken}-${dateToken}`;
+        const caption = `Attendance report ${format(state.currentDate, 'yyyy-MM-dd')} | Class: ${state.selectedClass || 'All'} | Shift: ${state.selectedShift || 'All'} | Subject: ${state.selectedSubject || 'All'}`;
+
+        const excelFormData = new FormData();
+        excelFormData.append('file', excelBlob, `${baseName}.xls`);
+        excelFormData.append('caption', `${caption} | File: XLS`);
+
+        const csvFormData = new FormData();
+        csvFormData.append('file', csvBlob, `${baseName}.csv`);
+        csvFormData.append('caption', `${caption} | File: CSV`);
+
+        const sendTasks = [
+          attendanceAPI.sendTelegramReport(excelFormData),
+          attendanceAPI.sendTelegramReport(csvFormData),
+        ];
+        try {
+          const results = await Promise.allSettled(sendTasks);
+          excelSent = results[0].status === 'fulfilled';
+          csvSent = results[1].status === 'fulfilled';
+        } catch (_sendError) {
+          excelSent = false;
+          csvSent = false;
+        }
+      }
+
       dispatch({ type: 'SET_NOTIFICATION', payload: { 
         type: 'success', 
-        message: `Attendance submitted successfully! (${markedCount} marked)` 
+        message: excelSent && csvSent
+          ? `Attendance submitted successfully! (${markedCount} marked). Excel and CSV sent to Admin Center Telegram.`
+          : excelSent || csvSent
+            ? `Attendance submitted successfully! (${markedCount} marked). One file sent to Telegram, one failed.`
+            : `Attendance submitted successfully! (${markedCount} marked). Telegram send failed.`
       }});
     } catch (error) {
       dispatch({ type: 'SET_NOTIFICATION', payload: { 
@@ -146,7 +320,13 @@ export function AttendanceProvider({ children }) {
       dispatch({ type: 'SET_SUBMITTING', payload: false });
       setTimeout(() => dispatch({ type: 'CLEAR_NOTIFICATION' }), 3000);
     }
-  }, [state.currentDate, state.records]);
+  }, [
+    state.currentDate,
+    state.records,
+    state.selectedClass,
+    state.selectedShift,
+    state.selectedSubject,
+  ]);
 
   const getStudentStatus = useCallback((studentId) => {
     const dateKey = format(state.currentDate, 'yyyy-MM-dd');

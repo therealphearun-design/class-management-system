@@ -15,7 +15,6 @@ export default function AttendancePage() {
     currentDate,
     selectedClass,
     selectedSubject,
-    selectedSection,
     selectedShift,
     viewMode,
     markAllPresent,
@@ -33,7 +32,6 @@ export default function AttendancePage() {
       student.rollNo,
       student.name,
       student.class,
-      student.section,
       student.shift || 'Morning',
       getStudentStatus(student.id) || 'unmarked',
     ]);
@@ -41,11 +39,10 @@ export default function AttendancePage() {
     const csvContent = [
       ['Date', format(currentDate, 'yyyy-MM-dd')],
       ['Class', selectedClass || 'All'],
-      ['Section', selectedSection || 'All'],
       ['Shift', selectedShift || 'All'],
       ['Subject', selectedSubject || 'All'],
       [],
-      ['Roll No', 'Student Name', 'Class', 'Section', 'Shift', 'Status'],
+      ['Roll No', 'Student Name', 'Class', 'Shift', 'Status'],
       ...rows,
     ]
       .map((line) => line.map(escapeCell).join(','))
@@ -80,7 +77,6 @@ export default function AttendancePage() {
             <td>${escapeHtml(student.rollNo)}</td>
             <td>${escapeHtml(student.name)}</td>
             <td>${escapeHtml(student.class)}</td>
-            <td>${escapeHtml(student.section)}</td>
             <td>${escapeHtml(student.shift || 'Morning')}</td>
             <td>${escapeHtml(getStudentStatus(student.id) || 'unmarked')}</td>
           </tr>
@@ -97,7 +93,6 @@ export default function AttendancePage() {
         <table border="1">
           <tr><th>Date</th><td>${escapeHtml(format(currentDate, 'yyyy-MM-dd'))}</td></tr>
           <tr><th>Class</th><td>${escapeHtml(selectedClass || 'All')}</td></tr>
-          <tr><th>Section</th><td>${escapeHtml(selectedSection || 'All')}</td></tr>
           <tr><th>Shift</th><td>${escapeHtml(selectedShift || 'All')}</td></tr>
           <tr><th>Subject</th><td>${escapeHtml(selectedSubject || 'All')}</td></tr>
         </table>
@@ -107,7 +102,6 @@ export default function AttendancePage() {
             <th>Roll No</th>
             <th>Student Name</th>
             <th>Class</th>
-            <th>Section</th>
             <th>Shift</th>
             <th>Status</th>
           </tr>

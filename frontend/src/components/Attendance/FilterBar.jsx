@@ -10,7 +10,7 @@ import {
 } from 'react-icons/hi';
 
 import { useAttendanceContext } from '../../context/AttendanceContext';
-import { classOptions, subjectOptions, sectionOptions, shiftOptions } from '../../data/students';
+import { classOptions, subjectOptions, shiftOptions } from '../../data/students';
 import { useFilteredStudents } from '../../hooks/useAttendance';
 import Button from '../common/Button';
 import Select from '../common/Select';
@@ -20,7 +20,6 @@ export default function FilterBar() {
     currentDate,
     selectedClass,
     selectedSubject,
-    selectedSection,
     selectedShift,
     viewMode,
     isSubmitting,
@@ -102,11 +101,6 @@ export default function FilterBar() {
             onChange={(val) => setFilter('selectedSubject', val)}
           />
           <Select
-            options={sectionOptions}
-            value={selectedSection}
-            onChange={(val) => setFilter('selectedSection', val)}
-          />
-          <Select
             options={shiftOptions}
             value={selectedShift}
             onChange={(val) => setFilter('selectedShift', val)}
@@ -117,7 +111,7 @@ export default function FilterBar() {
           variant="primary"
           size="lg"
           loading={isSubmitting}
-          onClick={() => submitAttendance(filteredStudents.map((s) => s.id))}
+          onClick={() => submitAttendance(filteredStudents.map((s) => s.id), filteredStudents)}
         >
           {isSubmitting ? 'Submitting...' : 'Take Attendance'}
         </Button>

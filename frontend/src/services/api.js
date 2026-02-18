@@ -76,6 +76,13 @@ export const attendanceAPI = {
   getHistory: (params) => api.get('/attendance/history', { params }),
   getStats: (params) => api.get('/attendance/stats', { params }),
   export: (params) => api.get('/attendance/export', { params, responseType: 'blob' }),
+  sendTelegramReport: (data) => api.post(
+    '/attendance/telegram-report',
+    data,
+    data instanceof FormData
+      ? { headers: { 'Content-Type': 'multipart/form-data' } }
+      : undefined
+  ),
 };
 
 export const assignmentsAPI = {

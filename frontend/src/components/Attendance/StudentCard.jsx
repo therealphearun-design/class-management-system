@@ -32,7 +32,7 @@ const StudentCard = memo(function StudentCard({ student }) {
           {student.name}
         </h3>
         <p className="text-xs text-gray-400 mt-0.5">
-          Roll #{student.rollNo} | {student.class}-{student.section} | {student.shift || 'Morning'}
+          Roll #{student.rollNo} | {student.class} | {student.shift || 'Morning'}
         </p>
       </div>
 

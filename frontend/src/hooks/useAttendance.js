@@ -6,7 +6,7 @@ import { useAttendanceContext } from '../context/AttendanceContext';
 import { studentsData } from '../data/students';
 
 export function useFilteredStudents() {
-  const { selectedClass, selectedSection, selectedShift } = useAttendanceContext();
+  const { selectedClass, selectedShift } = useAttendanceContext();
 
   const filteredStudents = useMemo(() => {
     let students = [...studentsData];
@@ -14,15 +14,12 @@ export function useFilteredStudents() {
     if (selectedClass) {
       students = students.filter(s => s.class === selectedClass);
     }
-    if (selectedSection) {
-      students = students.filter(s => s.section === selectedSection);
-    }
     if (selectedShift) {
       students = students.filter(s => s.shift === selectedShift);
     }
 
     return students;
-  }, [selectedClass, selectedSection, selectedShift]);
+  }, [selectedClass, selectedShift]);
 
   const groupedStudents = useMemo(() => {
     const groups = {};
