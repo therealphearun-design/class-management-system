@@ -78,9 +78,9 @@ export default function Footer() {
         <section>
           <h3 className="text-2xl font-semibold mb-3">Project Contact</h3>
           <div className="space-y-1 text-sky-300 font-semibold">
-            <p>Class Management System</p>
+            <p>Class Management System 2.0</p>
             <p>Information Technology Engineering</p>
-            <p>Phnom Penh, Cambodia</p>
+            <p>Tuek Tla, Sen Sokh, Phnom Penh, Cambodia</p>
           </div>
           <div className="mt-5 space-y-1.5 text-base font-semibold">
             <p>Support : Telegram Admin Center</p>

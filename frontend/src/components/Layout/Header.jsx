@@ -187,14 +187,14 @@ export default function Header({ onMenuToggle, isMenuEnabled, onMenuVisibilityTo
       <div className="bg-white border-b border-gray-200 px-3 sm:px-6 py-3">
         <div className="max-w-7xl mx-auto flex items-center gap-3 sm:gap-5">
           <div className="w-12 h-12 rounded-full border-2 border-blue-700 text-blue-700 flex items-center justify-center font-bold text-xs">
-            ITE
+            HS
           </div>
           <div className="min-w-0">
             <h1 className="text-xl sm:text-3xl font-extrabold text-blue-800 tracking-wide truncate">
-              Information Technology Engineering
+              សាលាវិទ្យាល័យ High School
             </h1>
             <p className="text-[10px] sm:text-xs uppercase tracking-[0.2em] text-blue-500">
-              Class Management Portal
+              High School Class Management Portal
             </p>
           </div>
         </div>
