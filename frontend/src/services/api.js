@@ -1,5 +1,7 @@
 import axios from 'axios';
 
+const RENDER_BACKEND_API_FALLBACK = 'https://backend-q148.onrender.com/api';
+
 function getDefaultApiBaseUrl() {
   if (typeof window === 'undefined') {
     return 'http://localhost:3001/api';
@@ -10,7 +12,7 @@ function getDefaultApiBaseUrl() {
     return 'http://localhost:3001/api';
   }
 
-  return '/api';
+  return RENDER_BACKEND_API_FALLBACK;
 }
 
 const API_BASE_URL = (process.env.REACT_APP_API_URL || getDefaultApiBaseUrl()).replace(/\/+$/, '');
