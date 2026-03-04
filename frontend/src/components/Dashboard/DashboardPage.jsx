@@ -12,7 +12,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { ACCOUNT_ROLES, normalizeRole } from '../../constants/roles';
 import { useAuth } from '../../context/AuthContext';
-import { studentsData } from '../../data/students';
+import { classOptions, studentsData } from '../../data/students';
 
 const ATTENDANCE_STORAGE_KEY = 'attendance_records_v1';
 
@@ -39,6 +39,7 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const role = normalizeRole(user?.role);
+  const isAdmin = role === ACCOUNT_ROLES.ADMIN;
   const isTeacher = role === ACCOUNT_ROLES.TEACHER;
 
   const dashboard = useMemo(() => {
@@ -48,6 +49,10 @@ export default function DashboardPage() {
     const shiftCount = new Set(studentsData.map((s) => s.shift)).size;
     const attendance = getAttendanceSummary();
 
+    const configuredClassCodes = classOptions.filter((opt) => opt.value).map((opt) => opt.value);
+    const firstClass = configuredClassCodes[0] || '-';
+    const lastClass = configuredClassCodes[configuredClassCodes.length - 1] || '-';
+
     return {
       totalStudents,
       classCount,
@@ -55,6 +60,7 @@ export default function DashboardPage() {
       shiftCount,
       attendanceRate: attendance.rate,
       markedCount: attendance.marked,
+      classRangeLabel: `${firstClass} to ${lastClass}`,
     };
   }, []);
 
@@ -89,13 +95,13 @@ export default function DashboardPage() {
     },
   ];
 
-  const recentActivities = isTeacher
+  const recentActivities = (isTeacher || isAdmin)
     ? [
         { id: 1, text: `${dashboard.totalStudents} active students in system`, time: 'Now' },
-        { id: 2, text: `${dashboard.classCount} classes configured (9A to 12F)`, time: 'Now' },
+        { id: 2, text: `${dashboard.classCount} classes configured (${dashboard.classRangeLabel})`, time: 'Now' },
         { id: 3, text: `${dashboard.shiftCount} study shifts available`, time: 'Now' },
-        { id: 4, text: 'Certificates page updated with live create/issue actions', time: 'Recent' },
-        { id: 5, text: 'Assignments page supports create + status filters', time: 'Recent' },
+        { id: 4, text: 'Assignments page supports create + status filters', time: 'Recent' },
+        { id: 5, text: isAdmin ? 'Admin Center controls all school records and reports' : 'Attendance workflow updated for teacher actions', time: 'Recent' },
       ]
     : [
         { id: 1, text: 'Your dashboard is ready for class updates.', time: 'Now' },
@@ -105,15 +111,23 @@ export default function DashboardPage() {
         { id: 5, text: 'Keep your profile updated for notifications.', time: 'Recent' },
       ];
 
-  const quickActions = isTeacher
+  const quickActions = isAdmin
     ? [
-        { label: 'Take Attendance', color: 'bg-green-100 text-green-700', to: '/attendance' },
         { label: 'Manage Students', color: 'bg-blue-100 text-blue-700', to: '/students' },
-        { label: 'Create Assignment', color: 'bg-purple-100 text-purple-700', to: '/assignments' },
+        { label: 'Student Lookup', color: 'bg-cyan-100 text-cyan-700', to: '/student-lookup' },
         { label: 'View Reports', color: 'bg-orange-100 text-orange-700', to: '/reports' },
-        { label: 'Issue Certificate', color: 'bg-pink-100 text-pink-700', to: '/certificates' },
+        { label: 'Open SMS/Mail', color: 'bg-pink-100 text-pink-700', to: '/messages' },
+        { label: 'Track Teacher Attendance', color: 'bg-green-100 text-green-700', to: '/attendance' },
       ]
-    : [
+    : isTeacher
+      ? [
+        { label: 'Take Attendance', color: 'bg-green-100 text-green-700', to: '/attendance' },
+        { label: 'Create Assignment', color: 'bg-purple-100 text-purple-700', to: '/assignments' },
+        { label: 'Exam Schedule', color: 'bg-indigo-100 text-indigo-700', to: '/exams' },
+        { label: 'Class Schedule', color: 'bg-teal-100 text-teal-700', to: '/schedule' },
+        { label: 'Open Calendar', color: 'bg-emerald-100 text-emerald-700', to: '/calendar' },
+      ]
+      : [
         { label: 'View Assignments', color: 'bg-purple-100 text-purple-700', to: '/assignments' },
         { label: 'Exam Schedule', color: 'bg-indigo-100 text-indigo-700', to: '/exams' },
         { label: 'View Marksheets', color: 'bg-blue-100 text-blue-700', to: '/marksheets' },

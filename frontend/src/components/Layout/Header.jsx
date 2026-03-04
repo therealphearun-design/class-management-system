@@ -20,29 +20,26 @@ import Avatar from '../common/Avatar';
 
 const LOCAL_STUDENTS_KEY = 'students_local_v2';
 const projectNavItems = [
-  { label: 'Dashboard', to: '/dashboard', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },
-  { label: 'Attendance', to: '/attendance', roles: [ACCOUNT_ROLES.TEACHER] },
-  { label: 'Students', to: '/students', roles: [ACCOUNT_ROLES.TEACHER] },
-  { label: 'Student Lookup', to: '/student-lookup', roles: [ACCOUNT_ROLES.TEACHER] },
+  { label: 'Dashboard', to: '/dashboard', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN] },
+  { label: 'Attendance', to: '/attendance', roles: [ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN] },
+  { label: 'Students', to: '/students', roles: [ACCOUNT_ROLES.ADMIN] },
+  { label: 'Student Lookup', to: '/student-lookup', roles: [ACCOUNT_ROLES.ADMIN] },
   { label: 'Assignments', to: '/assignments', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },
-  { label: 'Exams', to: '/exams', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },
-  { label: 'Certificates', to: '/certificates', roles: [ACCOUNT_ROLES.TEACHER] },
-  { label: 'Reports', to: '/reports', roles: [ACCOUNT_ROLES.TEACHER] },
-  { label: 'Calendar', to: '/calendar', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },
+  { label: 'Exam Schedule', to: '/exams', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN] },
+  { label: 'Reports', to: '/reports', roles: [ACCOUNT_ROLES.ADMIN] },
+  { label: 'Calendar', to: '/calendar', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN] },
 ];
 
 const pageEntries = [
-  { id: 'dashboard', title: 'Dashboard', subtitle: 'Overview', path: '/dashboard', type: 'page', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },
-  { id: 'attendance', title: 'Attendance', subtitle: 'Daily attendance', path: '/attendance', type: 'page', roles: [ACCOUNT_ROLES.TEACHER] },
-  { id: 'students', title: 'Students', subtitle: 'Student records', path: '/students', type: 'page', roles: [ACCOUNT_ROLES.TEACHER] },
-  { id: 'student-lookup', title: 'Student Lookup', subtitle: 'Find by ID or email', path: '/student-lookup', type: 'page', roles: [ACCOUNT_ROLES.TEACHER] },
+  { id: 'dashboard', title: 'Dashboard', subtitle: 'Overview', path: '/dashboard', type: 'page', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN] },
+  { id: 'attendance', title: 'Attendance', subtitle: 'Daily attendance', path: '/attendance', type: 'page', roles: [ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN] },
+  { id: 'students', title: 'Students', subtitle: 'Student records', path: '/students', type: 'page', roles: [ACCOUNT_ROLES.ADMIN] },
+  { id: 'student-lookup', title: 'Student Lookup', subtitle: 'Find by ID or email', path: '/student-lookup', type: 'page', roles: [ACCOUNT_ROLES.ADMIN] },
   { id: 'assignments', title: 'Assignments', subtitle: 'Homework and tasks', path: '/assignments', type: 'page', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },
-  { id: 'exams', title: 'Exams', subtitle: 'Exam list and schedule', path: '/exams', type: 'page', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },
-  { id: 'reports', title: 'Reports', subtitle: 'Analytics and reports', path: '/reports', type: 'page', roles: [ACCOUNT_ROLES.TEACHER] },
-  { id: 'messages', title: 'SMS/Mail', subtitle: 'Messages and announcements', path: '/messages', type: 'page', roles: [ACCOUNT_ROLES.TEACHER] },
-  { id: 'certificates', title: 'Certificates', subtitle: 'Issue certificates', path: '/certificates', type: 'page', roles: [ACCOUNT_ROLES.TEACHER] },
-  { id: 'profile', title: 'My Profile', subtitle: 'Account settings', path: '/profile', type: 'page', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },
-  { id: 'todos', title: 'To Do List', subtitle: 'Task tracking', path: '/todos', type: 'page', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },
+  { id: 'exams', title: 'Exam Schedule', subtitle: 'Published exam timetable', path: '/exams', type: 'page', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN] },
+  { id: 'reports', title: 'Reports', subtitle: 'Analytics and reports', path: '/reports', type: 'page', roles: [ACCOUNT_ROLES.ADMIN] },
+  { id: 'messages', title: 'SMS/Mail', subtitle: 'Messages and announcements', path: '/messages', type: 'page', roles: [ACCOUNT_ROLES.ADMIN] },
+  { id: 'profile', title: 'My Profile', subtitle: 'Account settings', path: '/profile', type: 'page', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN] },
 ];
 
 function readLocalStudents() {
@@ -82,8 +79,9 @@ export default function Header({ onMenuToggle, isMenuEnabled, onMenuVisibilityTo
   const searchInputRef = useRef(null);
 
   const searchEntries = useMemo(() => {
-    const localStudents = readLocalStudents();
-    const mergedStudents = [...localStudents, ...studentsData];
+    const canSearchStudentRecords = role === ACCOUNT_ROLES.ADMIN;
+    const localStudents = canSearchStudentRecords ? readLocalStudents() : [];
+    const mergedStudents = canSearchStudentRecords ? [...localStudents, ...studentsData] : [];
     const seen = new Set();
     const studentEntries = mergedStudents
       .filter((student) => {
@@ -101,7 +99,7 @@ export default function Header({ onMenuToggle, isMenuEnabled, onMenuVisibilityTo
         type: 'student',
       }));
 
-    const classEntries = classOptions
+    const classEntries = (canSearchStudentRecords ? classOptions : [])
       .filter((option) => option.value)
       .map((option) => ({
         id: `class-${option.value}`,
@@ -154,7 +152,7 @@ export default function Header({ onMenuToggle, isMenuEnabled, onMenuVisibilityTo
     if (!results.length) {
       if (e.key === 'Enter') {
         e.preventDefault();
-        navigate('/students');
+        navigate(role === ACCOUNT_ROLES.ADMIN ? '/students' : '/dashboard');
       }
       return;
     }
@@ -325,7 +323,7 @@ export default function Header({ onMenuToggle, isMenuEnabled, onMenuVisibilityTo
             )}
           </button>
 
-          {role === ACCOUNT_ROLES.TEACHER && (
+          {role === ACCOUNT_ROLES.ADMIN && (
             <button
               onClick={() => navigate('/messages')}
               className="relative p-2 rounded-lg hover:bg-gray-100 transition-colors"
@@ -337,9 +335,9 @@ export default function Header({ onMenuToggle, isMenuEnabled, onMenuVisibilityTo
           )}
 
           <button
-            onClick={() => navigate('/todos')}
+            type="button"
             className="relative p-2 rounded-lg hover:bg-gray-100 transition-colors"
-            aria-label="Open notifications"
+            aria-label="Notifications"
           >
             <HiOutlineBell className="w-5 h-5 text-gray-500" />
             <span className="absolute top-1 right-1 w-2 h-2 bg-primary-500 rounded-full" />

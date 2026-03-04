@@ -1,7 +1,8 @@
-const gradeLevels = [9, 10, 11, 12];
+export const gradeLevels = [7, 8, 9, 10, 11, 12];
 const classSections = ['A', 'B', 'C', 'D', 'E', 'F'];
 const studentsPerShift = 30;
-const studyShifts = ['Morning', 'Afternoon'];
+const SHIFT_BOTH = 'Both';
+const studyShifts = [SHIFT_BOTH];
 
 const firstNames = [
   'Sok', 'Chan', 'Keo', 'Vannak', 'Seng', 'Ngeth', 'Chea', 'Ros', 'Lim', 'Ouk',
@@ -18,14 +19,17 @@ const classCodes = gradeLevels.flatMap((grade) =>
   classSections.map((section) => `${grade}${section}`)
 );
 
+export const DEFAULT_CLASS_CODE = classCodes[0];
+export const DEFAULT_SECTION = 'A';
+export const DEFAULT_SHIFT = SHIFT_BOTH;
+
+export const normalizeShift = () => SHIFT_BOTH;
+
 export const studentsData = classCodes.flatMap((classCode) => {
-  const sectionMatch = String(classCode).match(/\d+([A-F])/i);
-  const section = sectionMatch ? sectionMatch[1].toUpperCase() : 'A';
   const classIndex = classCodes.indexOf(classCode);
 
   return studyShifts.flatMap((shift, shiftIdx) =>
     Array.from({ length: studentsPerShift }, (_, idx) => {
-      const rollNo = idx + 1;
       const serial =
         classIndex * studyShifts.length * studentsPerShift +
         shiftIdx * studentsPerShift +
@@ -38,11 +42,9 @@ export const studentsData = classCodes.flatMap((classCode) => {
       return {
         id,
         name,
-        avatar: generateAvatar(`${classCode}-${shift}-${rollNo}-${id}`),
+        avatar: generateAvatar(`${classCode}-${shift}-${id}`),
         class: classCode,
-        section,
         shift,
-        rollNo,
       };
     })
   );
@@ -55,27 +57,31 @@ export const classOptions = [
 
 export const subjectOptions = [
   { value: '', label: 'Select Subject' },
-  { value: 'khmer', label: 'Khmer Literature' },
+  { value: 'khmer', label: 'Khmer Language & Literature' },
   { value: 'mathematics', label: 'Mathematics' },
   { value: 'physics', label: 'Physics' },
   { value: 'chemistry', label: 'Chemistry' },
   { value: 'biology', label: 'Biology' },
-  { value: 'earth-science', label: 'Earth Science' },
+  { value: 'earth-science', label: 'Earth & Environmental Science' },
   { value: 'english', label: 'English' },
   { value: 'french', label: 'French' },
   { value: 'history', label: 'History' },
   { value: 'geography', label: 'Geography' },
-  { value: 'moral-civics', label: 'Moral-Civics' },
+  { value: 'moral-civics', label: 'Civics and Morality' },
   { value: 'social-studies', label: 'Social Studies' },
   { value: 'foreign-language', label: 'Foreign Language' },
-  { value: 'computer', label: 'Computer Science' },
+  { value: 'computer', label: 'Digital Literacy / ICT' },
   { value: 'physical-education', label: 'Physical Education & Sports' },
-  { value: 'life-skills-ict', label: 'Life Skills / ICT' },
+  { value: 'life-skills-ict', label: 'Life Skills and Career Orientation' },
 ];
+
+export const DEFAULT_SUBJECT_VALUE = 'mathematics';
+export const DEFAULT_SUBJECT_LABEL =
+  subjectOptions.find((item) => item.value === DEFAULT_SUBJECT_VALUE)?.label || 'Mathematics';
 
 export const shiftOptions = [
   { value: '', label: 'Select Shift' },
-  ...studyShifts.map((shift) => ({ value: shift, label: shift })),
+  ...studyShifts.map((shift) => ({ value: shift, label: 'Both Shifts (Morning + Afternoon)' })),
 ];
 
 export const sectionOptions = [

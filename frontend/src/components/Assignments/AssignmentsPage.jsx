@@ -12,7 +12,15 @@ import {
 
 import { ACCOUNT_ROLES, normalizeRole } from '../../constants/roles';
 import { useAuth } from '../../context/AuthContext';
-import { classOptions, sectionOptions, shiftOptions, studentsData, subjectOptions } from '../../data/students';
+import {
+  classOptions,
+  DEFAULT_CLASS_CODE,
+  DEFAULT_SHIFT,
+  DEFAULT_SUBJECT_LABEL,
+  normalizeShift,
+  studentsData,
+  subjectOptions,
+} from '../../data/students';
 import { assignmentsAPI, studentsAPI } from '../../services/api';
 import Badge from '../common/Badge';
 import Button from '../common/Button';
@@ -88,8 +96,7 @@ const saveLocalAssignments = (items) => {
 
 const normalizeStudent = (student) => ({
   ...student,
-  section: student.section || 'A',
-  shift: student.shift || 'Morning',
+  shift: normalizeShift(student.shift),
 });
 
 const mergeUniqueById = (items) => {
@@ -107,14 +114,13 @@ const normalizeAssignment = (assignment) => {
   return {
     id: assignment.id ?? `local-${Date.now()}`,
     title: assignment.title || 'Untitled Assignment',
-    subject: assignment.subject || 'Mathematics',
+    subject: assignment.subject || DEFAULT_SUBJECT_LABEL,
     dueDate: assignment.dueDate || '',
     status,
     submissions,
     total,
-    classCode: assignment.classCode || assignment.class || '10A',
-    section: assignment.section || 'A',
-    shift: assignment.shift || 'Morning',
+    classCode: assignment.classCode || assignment.class || DEFAULT_CLASS_CODE,
+    shift: normalizeShift(assignment.shift),
     description: assignment.description || '',
   };
 };
@@ -135,11 +141,9 @@ const getDerivedStatus = (assignment) => {
 export default function AssignmentsPage() {
   const { user } = useAuth();
   const role = normalizeRole(user?.role);
-  const isTeacher = role === ACCOUNT_ROLES.TEACHER;
+  const canManageAssignments = role === ACCOUNT_ROLES.TEACHER || role === ACCOUNT_ROLES.ADMIN;
   const currentStudentKey = String(user?.email || user?.id || user?.name || 'student');
   const studentClass = String(user?.class || '').trim();
-  const studentSection = String(user?.section || '').trim();
-  const studentShift = String(user?.shift || '').trim();
 
   const [assignments, setAssignments] = useState([]);
   const [students, setStudents] = useState([]);
@@ -148,7 +152,6 @@ export default function AssignmentsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [classFilter, setClassFilter] = useState(studentClass || 'all');
-  const [shiftFilter, setShiftFilter] = useState(studentShift || 'all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAssignmentId, setEditingAssignmentId] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -163,21 +166,20 @@ export default function AssignmentsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
-    subject: subjectOptions.find((opt) => opt.value === 'mathematics')?.label || 'Mathematics',
+    subject: DEFAULT_SUBJECT_LABEL,
     dueDate: '',
     submissions: 0,
     status: 'active',
-    classCode: '10A',
-    section: 'A',
-    shift: 'Morning',
+    classCode: DEFAULT_CLASS_CODE,
+    shift: DEFAULT_SHIFT,
     description: '',
   });
 
   const loadAssignmentsFromLocal = () => readLocalData(LOCAL_ASSIGNMENTS_KEY).map(normalizeAssignment);
 
-  const getStudentCountForGroup = (classCode, section, shift) => {
+  const getStudentCountForGroup = (classCode) => {
     const count = students.filter(
-      (student) => student.class === classCode && student.section === section && student.shift === shift
+      (student) => student.class === classCode
     ).length;
     return count || 0;
   };
@@ -216,7 +218,7 @@ export default function AssignmentsPage() {
   }, []);
 
   useEffect(() => {
-    if (isTeacher) return;
+    if (canManageAssignments) return;
 
     const seenByStudent = readLocalObject(LOCAL_ASSIGNMENT_SEEN_KEY);
     const seenForCurrent = Array.isArray(seenByStudent[currentStudentKey]) ? seenByStudent[currentStudentKey] : [];
@@ -272,7 +274,7 @@ export default function AssignmentsPage() {
 
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
-  }, [currentStudentKey, isTeacher]);
+  }, [currentStudentKey, canManageAssignments]);
 
   const submissionsByAssignment = useMemo(() => {
     const byAssignment = {};
@@ -313,7 +315,7 @@ export default function AssignmentsPage() {
   }, [studentSubmissions, students]);
 
   useEffect(() => {
-    if (!isTeacher) return;
+    if (!canManageAssignments) return;
 
     const teacherKey = String(user?.email || user?.id || user?.name || 'teacher');
     const seenByTeacher = readLocalObject(LOCAL_ASSIGNMENT_SUBMISSION_SEEN_BY_TEACHER_KEY);
@@ -352,7 +354,7 @@ export default function AssignmentsPage() {
 
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
-  }, [isTeacher, submissionsByAssignment, user]);
+  }, [canManageAssignments, submissionsByAssignment, user]);
 
   const persistSubmissions = (nextSubmissions) => {
     setStudentSubmissions(nextSubmissions);
@@ -366,13 +368,12 @@ export default function AssignmentsPage() {
   const resetForm = () => {
     setFormData({
       title: '',
-      subject: subjectOptions.find((opt) => opt.value === 'mathematics')?.label || 'Mathematics',
+      subject: DEFAULT_SUBJECT_LABEL,
       dueDate: '',
       submissions: 0,
       status: 'active',
-      classCode: '10A',
-      section: 'A',
-      shift: 'Morning',
+      classCode: DEFAULT_CLASS_CODE,
+      shift: DEFAULT_SHIFT,
       description: '',
     });
   };
@@ -392,7 +393,6 @@ export default function AssignmentsPage() {
       submissions: assignment.submissions,
       status: assignment.status,
       classCode: assignment.classCode,
-      section: assignment.section,
       shift: assignment.shift,
       description: assignment.description || '',
     });
@@ -403,11 +403,9 @@ export default function AssignmentsPage() {
     const q = search.trim().toLowerCase();
     return assignments
       .filter((assignment) => {
-        if (!isTeacher) {
+        if (!canManageAssignments) {
           const classMatch = !studentClass || assignment.classCode === studentClass;
-          const sectionMatch = !studentSection || assignment.section === studentSection;
-          const shiftMatch = !studentShift || assignment.shift === studentShift;
-          if (!(classMatch && sectionMatch && shiftMatch)) return false;
+          if (!classMatch) return false;
           if (assignment.status === 'draft') return false;
         }
 
@@ -419,8 +417,7 @@ export default function AssignmentsPage() {
           assignment.classCode.toLowerCase().includes(q);
         const matchesStatus = statusFilter === 'all' || derivedStatus === statusFilter;
         const matchesClass = classFilter === 'all' || assignment.classCode === classFilter;
-        const matchesShift = shiftFilter === 'all' || assignment.shift === shiftFilter;
-        return matchesSearch && matchesStatus && matchesClass && matchesShift;
+        return matchesSearch && matchesStatus && matchesClass;
       })
       .sort((a, b) => {
         const da = a.dueDate || '9999-12-31';
@@ -428,27 +425,24 @@ export default function AssignmentsPage() {
         if (da !== db) return da.localeCompare(db);
         return String(a.title).localeCompare(String(b.title));
       });
-  }, [assignments, classFilter, isTeacher, search, shiftFilter, statusFilter, studentClass, studentSection, studentShift]);
+  }, [assignments, classFilter, canManageAssignments, search, statusFilter, studentClass]);
 
   const stats = useMemo(() => {
     const base = assignments.filter((assignment) => {
-      if (!isTeacher) {
+      if (!canManageAssignments) {
         const classMatch = !studentClass || assignment.classCode === studentClass;
-        const sectionMatch = !studentSection || assignment.section === studentSection;
-        const shiftMatch = !studentShift || assignment.shift === studentShift;
-        if (!(classMatch && sectionMatch && shiftMatch)) return false;
+        if (!classMatch) return false;
         if (assignment.status === 'draft') return false;
       }
       const matchesClass = classFilter === 'all' || assignment.classCode === classFilter;
-      const matchesShift = shiftFilter === 'all' || assignment.shift === shiftFilter;
-      return matchesClass && matchesShift;
+      return matchesClass;
     });
     const active = base.filter((item) => getDerivedStatus(item) === 'active').length;
     const overdue = base.filter((item) => getDerivedStatus(item) === 'overdue').length;
     const completed = base.filter((item) => getDerivedStatus(item) === 'completed').length;
     const draft = base.filter((item) => getDerivedStatus(item) === 'draft').length;
     return { total: base.length, active, overdue, completed, draft };
-  }, [assignments, classFilter, isTeacher, shiftFilter, studentClass, studentSection, studentShift]);
+  }, [assignments, classFilter, canManageAssignments, studentClass]);
 
   const persistAssignments = (nextAssignments) => {
     setAssignments(nextAssignments);
@@ -462,7 +456,6 @@ export default function AssignmentsPage() {
         id: assignment.id,
         title: assignment.title,
         classCode: assignment.classCode,
-        section: assignment.section,
         shift: assignment.shift,
         createdAt: new Date().toISOString(),
       },
@@ -480,11 +473,11 @@ export default function AssignmentsPage() {
     event.preventDefault();
     if (!formData.title.trim() || !formData.dueDate) return;
 
-    const total = getStudentCountForGroup(formData.classCode, formData.section, formData.shift);
+    const total = getStudentCountForGroup(formData.classCode);
     if (total <= 0) {
       setNotification({
         type: 'error',
-        message: 'No students found for the selected class, section, and shift.',
+        message: 'No students found for the selected class and shift.',
       });
       setTimeout(() => setNotification(null), 3000);
       return;
@@ -503,7 +496,6 @@ export default function AssignmentsPage() {
       submissions,
       total,
       classCode: formData.classCode,
-      section: formData.section,
       shift: formData.shift,
       description: formData.description.trim(),
     });
@@ -746,7 +738,7 @@ export default function AssignmentsPage() {
     setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
   };
 
-  const selectedGroupTotal = getStudentCountForGroup(formData.classCode, formData.section, formData.shift);
+  const selectedGroupTotal = getStudentCountForGroup(formData.classCode);
   const showSubmissionField = formData.status !== 'draft';
 
   return (
@@ -767,12 +759,12 @@ export default function AssignmentsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Assignments</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {isTeacher
-              ? 'Real assignment workflow by class, section, and shift.'
+            {canManageAssignments
+              ? 'Real assignment workflow by class.'
               : 'View and submit your assignments.'}
           </p>
         </div>
-        {isTeacher && (
+        {canManageAssignments && (
           <Button icon={HiOutlinePlus} onClick={openCreateModal}>
             New Assignment
           </Button>
@@ -813,8 +805,8 @@ export default function AssignmentsPage() {
           />
         </div>
 
-        {isTeacher ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full sm:w-auto">
+        {canManageAssignments ? (
+          <div className="grid grid-cols-1 gap-2 w-full sm:w-auto">
             <select
               value={classFilter}
               onChange={(e) => setClassFilter(e.target.value)}
@@ -827,22 +819,10 @@ export default function AssignmentsPage() {
                 </option>
               ))}
             </select>
-            <select
-              value={shiftFilter}
-              onChange={(e) => setShiftFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-            >
-              <option value="all">All Shifts</option>
-              {shiftOptions.filter((option) => option.value).map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
           </div>
         ) : (
           <div className="text-xs px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-700">
-            Showing assignments for Class {studentClass || '-'} | Section {studentSection || '-'} | {studentShift || '-'}
+            Showing assignments for Class {studentClass || '-'}
           </div>
         )}
 
@@ -870,9 +850,9 @@ export default function AssignmentsPage() {
         </div>
       ) : filteredAssignments.length === 0 ? (
         <div className="bg-white rounded-xl p-8 shadow-card text-center text-sm text-gray-500">
-          {isTeacher
+          {canManageAssignments
             ? 'No assignments found.'
-            : `No published assignments found for your class (${studentClass || '-'} ${studentSection || '-'}, ${studentShift || '-'}) yet.`}
+            : `No published assignments found for your class (${studentClass || '-'}) yet.`}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -903,7 +883,7 @@ export default function AssignmentsPage() {
                 <h3 className="font-semibold text-gray-800 mb-1">{assignment.title}</h3>
                 <p className="text-xs text-gray-400 mb-3">{assignment.subject}</p>
                 <p className="text-xs text-gray-500 mb-3">
-                  Class {assignment.classCode} | Section {assignment.section} | {assignment.shift}
+                  Class {assignment.classCode}
                 </p>
                 {assignment.description ? (
                   <p className="text-xs text-gray-500 mb-3 line-clamp-2">{assignment.description}</p>
@@ -928,7 +908,7 @@ export default function AssignmentsPage() {
                   <span className="text-gray-500 font-medium">{assignment.submissions} submitted</span>
                 </div>
 
-                {isTeacher ? (
+                {canManageAssignments ? (
                   <div className="flex items-center justify-end gap-1">
                     {assignment.status === 'draft' && (
                       <button
@@ -1033,7 +1013,7 @@ export default function AssignmentsPage() {
         </div>
       )}
 
-      {isTeacher && (
+      {canManageAssignments && (
         <Modal
           isOpen={isModalOpen}
           onClose={() => {
@@ -1079,7 +1059,7 @@ export default function AssignmentsPage() {
             </select>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label htmlFor="assignment-class" className="block text-sm font-medium text-gray-700 mb-1">
                 Class
@@ -1091,40 +1071,6 @@ export default function AssignmentsPage() {
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 {classOptions.filter((option) => option.value).map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.value}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="assignment-section" className="block text-sm font-medium text-gray-700 mb-1">
-                Section
-              </label>
-              <select
-                id="assignment-section"
-                value={formData.section}
-                onChange={(e) => setFormData((prev) => ({ ...prev, section: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-              >
-                {sectionOptions.filter((option) => option.value).map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.value}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="assignment-shift" className="block text-sm font-medium text-gray-700 mb-1">
-                Shift
-              </label>
-              <select
-                id="assignment-shift"
-                value={formData.shift}
-                onChange={(e) => setFormData((prev) => ({ ...prev, shift: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-              >
-                {shiftOptions.filter((option) => option.value).map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.value}
                   </option>
@@ -1228,7 +1174,7 @@ export default function AssignmentsPage() {
         </Modal>
       )}
 
-      {isTeacher && (
+      {canManageAssignments && (
         <Modal
           isOpen={isSubmissionListModalOpen}
           onClose={() => {
@@ -1295,7 +1241,7 @@ export default function AssignmentsPage() {
         </Modal>
       )}
 
-      {!isTeacher && (
+      {!canManageAssignments && (
         <Modal
           isOpen={isSubmitModalOpen}
           onClose={() => {
@@ -1390,3 +1336,4 @@ export default function AssignmentsPage() {
     </div>
   );
 }
+

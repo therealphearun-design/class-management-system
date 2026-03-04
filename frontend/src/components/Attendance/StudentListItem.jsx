@@ -6,6 +6,11 @@ import Avatar from '../common/Avatar';
 const StudentListItem = memo(function StudentListItem({ student }) {
   const { markAttendance, getStudentStatus } = useAttendanceContext();
   const status = getStudentStatus(student.id);
+  const referenceLabel = student.employeeId
+    ? `ID ${student.employeeId}`
+    : `Roll #${student.rollNo ?? '-'}`;
+  const groupLabel = student.class || '-';
+  const shiftLabel = student.shift || 'Morning';
 
   return (
     <div className="flex items-center justify-between bg-white rounded-xl px-5 py-3 shadow-card hover:shadow-md transition-all duration-200 border border-transparent hover:border-primary-100">
@@ -14,7 +19,7 @@ const StudentListItem = memo(function StudentListItem({ student }) {
         <div>
           <h3 className="text-sm font-semibold text-gray-800">{student.name}</h3>
           <p className="text-xs text-gray-400">
-            Roll #{student.rollNo} | {student.class} | {student.shift || 'Morning'}
+            {referenceLabel} | {groupLabel} | {shiftLabel}
           </p>
         </div>
       </div>

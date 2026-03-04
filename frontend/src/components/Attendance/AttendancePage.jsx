@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 import { format } from 'date-fns';
 import { HiOutlineCheckCircle } from 'react-icons/hi';
@@ -6,11 +6,32 @@ import { HiOutlineCheckCircle } from 'react-icons/hi';
 import FilterBar from './FilterBar';
 import StudentCard from './StudentCard';
 import StudentListItem from './StudentListItem';
+import { ACCOUNT_ROLES, normalizeRole } from '../../constants/roles';
 import { useAttendanceContext } from '../../context/AttendanceContext';
+import { useAuth } from '../../context/AuthContext';
+import {
+  getDepartmentSubjectOptions,
+  loadTeachers,
+  saveTeachers,
+  teacherDepartmentOptions,
+} from '../../data/teachers';
 import { useFilteredStudents, useAttendanceStats } from '../../hooks/useAttendance';
 import Button from '../common/Button';
+import Modal from '../common/Modal';
+
+const EMPTY_STAFF_FORM = {
+  id: '',
+  employeeId: '',
+  name: '',
+  class: 'Science Department',
+  subject: 'Mathematics',
+};
 
 export default function AttendancePage() {
+  const { user } = useAuth();
+  const isAdmin = normalizeRole(user?.role) === ACCOUNT_ROLES.ADMIN;
+  const recordLabel = isAdmin ? 'Teacher' : 'Student';
+
   const {
     currentDate,
     selectedClass,
@@ -21,18 +42,106 @@ export default function AttendancePage() {
     notification,
     getStudentStatus,
   } = useAttendanceContext();
+
   const { filteredStudents, groupedStudents } = useFilteredStudents();
   const stats = useAttendanceStats();
+
+  const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
+  const [staffMembers, setStaffMembers] = useState(() => (isAdmin ? loadTeachers() : []));
+  const [staffForm, setStaffForm] = useState(EMPTY_STAFF_FORM);
+
+  const editableDepartmentOptions = useMemo(
+    () => teacherDepartmentOptions.filter((item) => item.value),
+    []
+  );
+  const editableSubjectOptions = useMemo(
+    () => getDepartmentSubjectOptions(staffForm.class),
+    [staffForm.class]
+  );
+
+  useEffect(() => {
+    if (!isAdmin) return undefined;
+    const sync = () => setStaffMembers(loadTeachers());
+    sync();
+    window.addEventListener('teachers-updated', sync);
+    window.addEventListener('storage', sync);
+    return () => {
+      window.removeEventListener('teachers-updated', sync);
+      window.removeEventListener('storage', sync);
+    };
+  }, [isAdmin]);
+
+  const resetStaffForm = () => {
+    const defaultDepartment = editableDepartmentOptions[0]?.value || 'Science Department';
+    const defaultSubject = getDepartmentSubjectOptions(defaultDepartment)[0]?.value || '';
+    setStaffForm({
+      id: '',
+      employeeId: '',
+      name: '',
+      class: defaultDepartment,
+      subject: defaultSubject,
+    });
+  };
+
+  const handleEditStaff = (staff) => {
+    const safeDepartment = staff.class || editableDepartmentOptions[0]?.value || 'Science Department';
+    const safeSubjects = getDepartmentSubjectOptions(safeDepartment);
+    const safeSubject = safeSubjects.some((item) => item.value === staff.subject)
+      ? staff.subject
+      : (safeSubjects[0]?.value || '');
+    setStaffForm({
+      id: staff.id,
+      employeeId: staff.employeeId || '',
+      name: staff.name || '',
+      class: safeDepartment,
+      subject: safeSubject,
+    });
+    setIsStaffModalOpen(true);
+  };
+
+  const handleSaveStaff = (event) => {
+    event.preventDefault();
+    const name = String(staffForm.name || '').trim();
+    if (!name || !staffForm.class || !staffForm.subject) return;
+
+    const nextList = [...staffMembers];
+    if (staffForm.id) {
+      const index = nextList.findIndex((item) => item.id === staffForm.id);
+      if (index >= 0) {
+        nextList[index] = {
+          ...nextList[index],
+          name,
+          class: staffForm.class,
+          subject: staffForm.subject,
+          employeeId: String(staffForm.employeeId || nextList[index].employeeId || '').trim(),
+        };
+      }
+    } else {
+      nextList.push({
+        id: `teacher-${Date.now()}`,
+        employeeId: String(staffForm.employeeId || `T${String(nextList.length + 1).padStart(4, '0')}`),
+        name,
+        class: staffForm.class,
+        subject: staffForm.subject,
+        shift: 'Staff',
+      });
+    }
+
+    const saved = saveTeachers(nextList);
+    setStaffMembers(saved);
+    window.dispatchEvent(new Event('teachers-updated'));
+    resetStaffForm();
+  };
 
   const exportAttendanceCsv = () => {
     if (filteredStudents.length === 0) return;
 
     const escapeCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
     const rows = filteredStudents.map((student) => [
-      student.rollNo,
+      student.employeeId || student.rollNo || '-',
       student.name,
       student.class,
-      student.shift || 'Morning',
+      student.shift || (isAdmin ? 'Staff' : 'Morning'),
       getStudentStatus(student.id) || 'unmarked',
     ]);
 
@@ -42,7 +151,7 @@ export default function AttendancePage() {
       ['Shift', selectedShift || 'All'],
       ['Subject', selectedSubject || 'All'],
       [],
-      ['Roll No', 'Student Name', 'Class', 'Shift', 'Status'],
+      [isAdmin ? 'Teacher ID' : 'Roll No', `${recordLabel} Name`, isAdmin ? 'Department' : 'Class', 'Shift', 'Status'],
       ...rows,
     ]
       .map((line) => line.map(escapeCell).join(','))
@@ -74,10 +183,10 @@ export default function AttendancePage() {
       .map(
         (student) => `
           <tr>
-            <td>${escapeHtml(student.rollNo)}</td>
+            <td>${escapeHtml(student.employeeId || student.rollNo || '-')}</td>
             <td>${escapeHtml(student.name)}</td>
             <td>${escapeHtml(student.class)}</td>
-            <td>${escapeHtml(student.shift || 'Morning')}</td>
+            <td>${escapeHtml(student.shift || (isAdmin ? 'Staff' : 'Morning'))}</td>
             <td>${escapeHtml(getStudentStatus(student.id) || 'unmarked')}</td>
           </tr>
         `
@@ -99,9 +208,9 @@ export default function AttendancePage() {
         <br />
         <table border="1">
           <tr>
-            <th>Roll No</th>
-            <th>Student Name</th>
-            <th>Class</th>
+            <th>${escapeHtml(isAdmin ? 'Teacher ID' : 'Roll No')}</th>
+            <th>${escapeHtml(`${recordLabel} Name`)}</th>
+            <th>${escapeHtml(isAdmin ? 'Department' : 'Class')}</th>
             <th>Shift</th>
             <th>Status</th>
           </tr>
@@ -124,12 +233,9 @@ export default function AttendancePage() {
 
   return (
     <div className="space-y-6">
-      {/* Notification */}
       {notification && (
         <div
-          className={`fixed top-4 right-4 z-50 flex items-center gap-2 px-5 py-3 rounded-xl shadow-lg text-sm font-medium animate-bounce
-            ${notification.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}
-          `}
+          className={`fixed top-4 right-4 z-50 flex items-center gap-2 px-5 py-3 rounded-xl shadow-lg text-sm font-medium animate-bounce ${notification.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}
         >
           <HiOutlineCheckCircle className="w-5 h-5" />
           {notification.message}
@@ -138,11 +244,10 @@ export default function AttendancePage() {
 
       <FilterBar />
 
-      {/* Stats Bar */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <div className="bg-white rounded-xl p-4 shadow-card text-center">
           <p className="text-2xl font-bold text-gray-800">{stats.total}</p>
-          <p className="text-xs text-gray-500 mt-1">Total Students</p>
+          <p className="text-xs text-gray-500 mt-1">Total {recordLabel}s</p>
         </div>
         <div className="bg-white rounded-xl p-4 shadow-card text-center border-b-4 border-attendance-present">
           <p className="text-2xl font-bold text-attendance-present">{stats.present}</p>
@@ -162,7 +267,6 @@ export default function AttendancePage() {
         </div>
       </div>
 
-      {/* Quick actions */}
       <div className="flex items-center gap-3">
         <Button
           variant="success"
@@ -187,36 +291,45 @@ export default function AttendancePage() {
         >
           Export Excel
         </Button>
+        {isAdmin && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              resetStaffForm();
+              setIsStaffModalOpen(true);
+            }}
+          >
+            Manage Staff
+          </Button>
+        )}
         <span className="text-sm text-gray-400">
-          {filteredStudents.length} students found
+          {filteredStudents.length} {recordLabel.toLowerCase()}s found.
         </span>
       </div>
 
-      {/* Student Grid/List grouped by letter */}
       {Object.keys(groupedStudents).length === 0 ? (
         <div className="bg-white rounded-xl p-12 shadow-card text-center">
           <div className="text-6xl mb-4">📋</div>
-          <h3 className="text-lg font-semibold text-gray-700">No Students Found</h3>
+          <h3 className="text-lg font-semibold text-gray-700">No {recordLabel}s Found</h3>
           <p className="text-sm text-gray-400 mt-2">
-            Try adjusting the filters to find students.
+            Try adjusting the filters to find {recordLabel.toLowerCase()}s.
           </p>
         </div>
       ) : (
         <div className="space-y-8">
           {Object.entries(groupedStudents).map(([letter, students]) => (
             <section key={letter}>
-              {/* Letter header */}
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-8 h-8 bg-primary-100 text-primary-700 rounded-lg flex items-center justify-center font-bold text-sm">
                   {letter}
                 </div>
                 <div className="h-px flex-1 bg-gray-200" />
                 <span className="text-xs text-gray-400 font-medium">
-                  {students.length} students
+                  {students.length} {recordLabel.toLowerCase()}s
                 </span>
               </div>
 
-              {/* Grid view */}
               {viewMode === 'grid' ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                   {students.map((student) => (
@@ -224,7 +337,6 @@ export default function AttendancePage() {
                   ))}
                 </div>
               ) : (
-                /* List view */
                 <div className="space-y-2">
                   {students.map((student) => (
                     <StudentListItem key={student.id} student={student} />
@@ -234,6 +346,90 @@ export default function AttendancePage() {
             </section>
           ))}
         </div>
+      )}
+
+      {isAdmin && (
+        <Modal
+          isOpen={isStaffModalOpen}
+          onClose={() => setIsStaffModalOpen(false)}
+          title="Staff Management"
+        >
+          <form onSubmit={handleSaveStaff} className="space-y-3">
+            <div>
+              <label htmlFor="staff-name" className="block text-xs font-medium text-gray-600 mb-1">Name</label>
+              <input
+                id="staff-name"
+                type="text"
+                value={staffForm.name}
+                onChange={(e) => setStaffForm((prev) => ({ ...prev, name: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                required
+              />
+            </div>
+            <div>
+              <label htmlFor="staff-employee-id" className="block text-xs font-medium text-gray-600 mb-1">Employee ID</label>
+              <input
+                id="staff-employee-id"
+                type="text"
+                value={staffForm.employeeId}
+                onChange={(e) => setStaffForm((prev) => ({ ...prev, employeeId: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                placeholder="Auto generated if empty"
+              />
+            </div>
+            <div>
+              <label htmlFor="staff-department" className="block text-xs font-medium text-gray-600 mb-1">Department</label>
+              <select
+                id="staff-department"
+                value={staffForm.class}
+                onChange={(e) => {
+                  const department = e.target.value;
+                  const firstSubject = getDepartmentSubjectOptions(department)[0]?.value || '';
+                  setStaffForm((prev) => ({ ...prev, class: department, subject: firstSubject }));
+                }}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+              >
+                {editableDepartmentOptions.map((item) => (
+                  <option key={item.value} value={item.value}>{item.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="staff-subject" className="block text-xs font-medium text-gray-600 mb-1">Subject</label>
+              <select
+                id="staff-subject"
+                value={staffForm.subject}
+                onChange={(e) => setStaffForm((prev) => ({ ...prev, subject: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+              >
+                {editableSubjectOptions.map((item) => (
+                  <option key={item.value} value={item.value}>{item.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <Button type="button" variant="secondary" onClick={resetStaffForm}>New</Button>
+              <Button type="submit">{staffForm.id ? 'Update Staff' : 'Add Staff'}</Button>
+            </div>
+          </form>
+
+          <div className="mt-4 border-t border-gray-100 pt-3 max-h-44 overflow-y-auto">
+            <p className="text-xs font-medium text-gray-600 mb-2">Existing Staff</p>
+            <div className="space-y-1.5">
+              {staffMembers.map((staff) => (
+                <button
+                  key={staff.id}
+                  type="button"
+                  onClick={() => handleEditStaff(staff)}
+                  className="w-full text-left px-2 py-1.5 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200"
+                >
+                  <p className="text-sm text-gray-800">{staff.name}</p>
+                  <p className="text-xs text-gray-500">{staff.class} | {staff.subject}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

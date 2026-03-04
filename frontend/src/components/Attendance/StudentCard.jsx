@@ -6,6 +6,11 @@ import Avatar from '../common/Avatar';
 const StudentCard = memo(function StudentCard({ student }) {
   const { markAttendance, getStudentStatus } = useAttendanceContext();
   const status = getStudentStatus(student.id);
+  const referenceLabel = student.employeeId
+    ? `ID ${student.employeeId}`
+    : `Roll #${student.rollNo ?? '-'}`;
+  const groupLabel = student.class || '-';
+  const shiftLabel = student.shift || 'Morning';
 
   const handleMark = (newStatus) => {
     markAttendance(student.id, newStatus);
@@ -32,7 +37,7 @@ const StudentCard = memo(function StudentCard({ student }) {
           {student.name}
         </h3>
         <p className="text-xs text-gray-400 mt-0.5">
-          Roll #{student.rollNo} | {student.class} | {student.shift || 'Morning'}
+          {referenceLabel} | {groupLabel} | {shiftLabel}
         </p>
       </div>
 

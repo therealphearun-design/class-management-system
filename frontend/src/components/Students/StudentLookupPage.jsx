@@ -26,7 +26,7 @@ const mergeUniqueById = (items) => {
     if (!item || typeof item !== 'object') return;
     const idKey = item.id !== undefined && item.id !== null ? `id:${item.id}` : null;
     const emailKey = item.email ? `email:${String(item.email).toLowerCase()}` : null;
-    const fallbackKey = `f:${String(item.name || '').toLowerCase()}-${String(item.class || '')}-${String(item.rollNo || index)}`;
+    const fallbackKey = `f:${String(item.name || '').toLowerCase()}-${String(item.class || '')}-${String(index)}`;
     map.set(idKey || emailKey || fallbackKey, item);
   });
   return Array.from(map.values());
@@ -160,14 +160,12 @@ export default function StudentLookupPage() {
 
   const exportCsv = () => {
     const escapeCsv = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
-    const header = ['Name', 'Student ID', 'Class', 'Section', 'Shift', 'Roll No', 'Date of Birth', 'Login Password', 'Email'];
+    const header = ['Name', 'Student ID', 'Class', 'Shift', 'Date of Birth', 'Login Password', 'Email'];
     const rows = allStudentsSorted.map((student) => ([
       student.name,
       student.studentId,
       student.class,
-      student.section,
       student.shift,
-      student.rollNo || '',
       student.dateOfBirth || '',
       buildStudentPassword(student),
       student.email,
@@ -189,9 +187,7 @@ export default function StudentLookupPage() {
         <td>${escapeHtml(student.name)}</td>
         <td>${escapeHtml(student.studentId)}</td>
         <td>${escapeHtml(student.class)}</td>
-        <td>${escapeHtml(student.section)}</td>
         <td>${escapeHtml(student.shift)}</td>
-        <td>${escapeHtml(student.rollNo || '')}</td>
         <td>${escapeHtml(student.dateOfBirth || '')}</td>
         <td>${escapeHtml(buildStudentPassword(student))}</td>
         <td>${escapeHtml(student.email)}</td>
@@ -208,9 +204,7 @@ export default function StudentLookupPage() {
                 <th>Name</th>
                 <th>Student ID</th>
                 <th>Class</th>
-                <th>Section</th>
                 <th>Shift</th>
-                <th>Roll No</th>
                 <th>Date of Birth</th>
                 <th>Login Password</th>
                 <th>Email</th>
@@ -329,7 +323,7 @@ export default function StudentLookupPage() {
                 >
                   <p className="text-sm font-semibold text-gray-800">{student.name}</p>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    {student.studentId} - {student.class} {student.section}
+                    {student.studentId} - {student.class}
                   </p>
                 </button>
               ))}
@@ -361,16 +355,8 @@ export default function StudentLookupPage() {
                     <p className="text-sm font-semibold text-gray-800 mt-1">{selectedStudent.class}</p>
                   </div>
                   <div className="rounded-lg border border-gray-200 p-3">
-                    <p className="text-xs text-gray-500">Section</p>
-                    <p className="text-sm font-semibold text-gray-800 mt-1">{selectedStudent.section}</p>
-                  </div>
-                  <div className="rounded-lg border border-gray-200 p-3">
                     <p className="text-xs text-gray-500">Shift</p>
                     <p className="text-sm font-semibold text-gray-800 mt-1">{selectedStudent.shift}</p>
-                  </div>
-                  <div className="rounded-lg border border-gray-200 p-3">
-                    <p className="text-xs text-gray-500">Roll No</p>
-                    <p className="text-sm font-semibold text-gray-800 mt-1">{selectedStudent.rollNo || '-'}</p>
                   </div>
                   <div className="rounded-lg border border-gray-200 p-3">
                     <p className="text-xs text-gray-500">Date of Birth</p>

@@ -18,7 +18,7 @@ import {
   YAxis,
 } from 'recharts';
 
-import { classOptions, studentsData } from '../../data/students';
+import { classOptions, studentsData, subjectOptions } from '../../data/students';
 import Button from '../common/Button';
 import Select from '../common/Select';
 
@@ -30,11 +30,11 @@ const REPORT_HISTORY_KEY = 'report_history_v1';
 const COLORS = ['#2563eb', '#16a34a', '#ea580c', '#7c3aed', '#dc2626', '#0ea5e9'];
 
 const defaultAssignments = [
-  { subject: 'Mathematics', submissions: 28, total: 30, classCode: '10A' },
-  { subject: 'Science', submissions: 22, total: 30, classCode: '11C' },
-  { subject: 'English', submissions: 30, total: 30, classCode: '9B' },
-  { subject: 'History', submissions: 30, total: 30, classCode: '10D' },
-  { subject: 'Computer Science', submissions: 15, total: 30, classCode: '12A' },
+  { subject: 'Khmer Language & Literature', submissions: 27, total: 30, classCode: '7A' },
+  { subject: 'Mathematics', submissions: 25, total: 30, classCode: '8C' },
+  { subject: 'English', submissions: 26, total: 30, classCode: '9B' },
+  { subject: 'Physics', submissions: 23, total: 30, classCode: '11D' },
+  { subject: 'Digital Literacy / ICT', submissions: 20, total: 30, classCode: '12A' },
 ];
 
 function safeReadJson(key, fallback) {
@@ -107,6 +107,10 @@ export default function ReportsPage() {
   const [recentReports, setRecentReports] = useState(() =>
     safeReadJson(REPORT_HISTORY_KEY, []).slice(0, 8)
   );
+  const validSubjects = useMemo(
+    () => new Set(subjectOptions.filter((item) => item.value).map((item) => item.label)),
+    []
+  );
 
   const students = useMemo(() => getMergedStudents(), []);
   const attendanceRecords = useMemo(() => safeReadJson(ATTENDANCE_STORAGE_KEY, {}), []);
@@ -174,7 +178,7 @@ export default function ReportsPage() {
 
     const subjectMap = {};
     scoped.forEach((assignment) => {
-      const subject = assignment.subject || 'Unknown';
+      const subject = validSubjects.has(assignment.subject) ? assignment.subject : assignment.subject || 'Unknown';
       const total = Math.max(1, Number(assignment.total) || 1);
       const rate = Math.min(100, Math.max(0, (Number(assignment.submissions) / total) * 100));
 
@@ -198,7 +202,7 @@ export default function ReportsPage() {
     return result.length > 0
       ? result
       : [{ subject: 'No Data', average: 0, highest: 0, lowest: 0 }];
-  }, [assignments, selectedClass]);
+  }, [assignments, selectedClass, validSubjects]);
 
   const demographicsData = useMemo(() => {
     const shiftCount = filteredStudents.reduce((acc, student) => {

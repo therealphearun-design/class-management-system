@@ -9,14 +9,13 @@ const moduleLinks = [
   'Student Records',
   'Assignments',
   'Exams',
-  'Certificates',
   'Reports & Calendar',
 ];
 
 const studentAccess = [
   'Dashboard, Schedule, and Calendar',
   'Assignments, Exams, and Marksheets',
-  'Messages and To Do List',
+  'Messages and announcements',
   'Profile management',
 ];
 
@@ -24,7 +23,7 @@ const teacherAccess = [
   'All student account features',
   'Attendance management',
   'Student records management',
-  'Certificates and Reports',
+  'Reports and data monitoring',
 ];
 const supportLinks = ['Telegram Admin Center', 'System Feedback', 'Technical Issue Tracking', 'Release Updates'];
 

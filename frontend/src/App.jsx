@@ -6,7 +6,6 @@ import AssignmentsPage from './components/Assignments/AssignmentsPage';
 import AttendancePage from './components/Attendance/AttendancePage';
 import LoginPage from './components/Auth/LoginPage';
 import CalendarPage from './components/Calendar/CalendarPage';
-import CertificatesPage from './components/Certificates/CertificatesPage';
 import DashboardPage from './components/Dashboard/DashboardPage';
 import ExamsPage from './components/Exams/ExamsPage';
 import Layout from './components/Layout/Layout';
@@ -17,7 +16,6 @@ import ReportsPage from './components/Reports/ReportsPage';
 import SchedulePage from './components/Schedule/SchedulePage';
 import StudentLookupPage from './components/Students/StudentLookupPage';
 import StudentsPage from './components/Students/StudentsPage';
-import TodosPage from './components/Todos/TodosPage';
 import { ACCOUNT_ROLES, getRoleHomePath, normalizeRole } from './constants/roles';
 import { AttendanceProvider } from './context/AttendanceContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -68,42 +66,42 @@ function AppRoutes() {
         )
       } />
       <Route path="/dashboard" element={
-        <PrivateRoute allowedRoles={[ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER]}>
+        <PrivateRoute allowedRoles={[ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN]}>
           <Layout>
             <DashboardPage />
           </Layout>
         </PrivateRoute>
       } />
       <Route path="/attendance" element={
-        <PrivateRoute allowedRoles={[ACCOUNT_ROLES.TEACHER]}>
+        <PrivateRoute allowedRoles={[ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN]}>
           <Layout>
             <AttendancePage />
           </Layout>
         </PrivateRoute>
       } />
       <Route path="/students" element={
-        <PrivateRoute allowedRoles={[ACCOUNT_ROLES.TEACHER]}>
+        <PrivateRoute allowedRoles={[ACCOUNT_ROLES.ADMIN]}>
           <Layout>
             <StudentsPage />
           </Layout>
         </PrivateRoute>
       } />
       <Route path="/student-lookup" element={
-        <PrivateRoute allowedRoles={[ACCOUNT_ROLES.TEACHER]}>
+        <PrivateRoute allowedRoles={[ACCOUNT_ROLES.ADMIN]}>
           <Layout>
             <StudentLookupPage />
           </Layout>
         </PrivateRoute>
       } />
       <Route path="/schedule" element={
-        <PrivateRoute allowedRoles={[ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER]}>
+        <PrivateRoute allowedRoles={[ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN]}>
           <Layout>
             <SchedulePage />
           </Layout>
         </PrivateRoute>
       } />
       <Route path="/marksheets" element={
-        <PrivateRoute allowedRoles={[ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER]}>
+        <PrivateRoute allowedRoles={[ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.ADMIN]}>
           <Layout>
             <MarksheetsPage />
           </Layout>
@@ -117,51 +115,37 @@ function AppRoutes() {
         </PrivateRoute>
       } />
       <Route path="/exams" element={
-        <PrivateRoute allowedRoles={[ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER]}>
+        <PrivateRoute allowedRoles={[ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN]}>
           <Layout>
             <ExamsPage />
           </Layout>
         </PrivateRoute>
       } />
-      <Route path="/certificates" element={
-        <PrivateRoute allowedRoles={[ACCOUNT_ROLES.TEACHER]}>
-          <Layout>
-            <CertificatesPage />
-          </Layout>
-        </PrivateRoute>
-      } />
       <Route path="/reports" element={
-        <PrivateRoute allowedRoles={[ACCOUNT_ROLES.TEACHER]}>
+        <PrivateRoute allowedRoles={[ACCOUNT_ROLES.ADMIN]}>
           <Layout>
             <ReportsPage />
           </Layout>
         </PrivateRoute>
       } />
       <Route path="/calendar" element={
-        <PrivateRoute allowedRoles={[ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER]}>
+        <PrivateRoute allowedRoles={[ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN]}>
           <Layout>
             <CalendarPage />
           </Layout>
         </PrivateRoute>
       } />
       <Route path="/messages" element={
-        <PrivateRoute allowedRoles={[ACCOUNT_ROLES.TEACHER]}>
+        <PrivateRoute allowedRoles={[ACCOUNT_ROLES.ADMIN]}>
           <Layout>
             <MessagesPage />
           </Layout>
         </PrivateRoute>
       } />
       <Route path="/profile" element={
-        <PrivateRoute allowedRoles={[ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER]}>
+        <PrivateRoute allowedRoles={[ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN]}>
           <Layout>
             <ProfilePage />
-          </Layout>
-        </PrivateRoute>
-      } />
-      <Route path="/todos" element={
-        <PrivateRoute allowedRoles={[ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER]}>
-          <Layout>
-            <TodosPage />
           </Layout>
         </PrivateRoute>
       } />

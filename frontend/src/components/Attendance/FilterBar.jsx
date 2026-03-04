@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo } from 'react';
 
 import { format, addDays, subDays } from 'date-fns';
 import {
@@ -9,18 +9,26 @@ import {
   HiOutlineViewList,
 } from 'react-icons/hi';
 
+import { ACCOUNT_ROLES, normalizeRole } from '../../constants/roles';
 import { useAttendanceContext } from '../../context/AttendanceContext';
-import { classOptions, subjectOptions, shiftOptions } from '../../data/students';
+import { useAuth } from '../../context/AuthContext';
+import { classOptions, subjectOptions } from '../../data/students';
+import {
+  getDepartmentSubjectOptions,
+  loadTeachers,
+  teacherDepartmentOptions,
+} from '../../data/teachers';
 import { useFilteredStudents } from '../../hooks/useAttendance';
 import Button from '../common/Button';
 import Select from '../common/Select';
 
 export default function FilterBar() {
+  const { user } = useAuth();
+  const isAdmin = normalizeRole(user?.role) === ACCOUNT_ROLES.ADMIN;
   const {
     currentDate,
     selectedClass,
     selectedSubject,
-    selectedShift,
     viewMode,
     isSubmitting,
     setDate,
@@ -29,12 +37,34 @@ export default function FilterBar() {
     submitAttendance,
   } = useAttendanceContext();
   const { filteredStudents } = useFilteredStudents();
+  const classFilterOptions = isAdmin ? teacherDepartmentOptions : classOptions;
+  const subjectFilterOptions = useMemo(() => {
+    if (!isAdmin) return subjectOptions;
+    const teacherList = loadTeachers();
+    const subjects = selectedClass
+      ? getDepartmentSubjectOptions(selectedClass).map((item) => item.value)
+      : Array.from(new Set(teacherList.map((teacher) => teacher.subject))).sort();
+    return [
+      { value: '', label: 'All Subjects' },
+      ...subjects.map((subject) => ({ value: subject, label: subject })),
+    ];
+  }, [isAdmin, selectedClass]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    const allowed = new Set(subjectFilterOptions.map((item) => item.value));
+    if (selectedSubject && !allowed.has(selectedSubject)) {
+      setFilter('selectedSubject', '');
+    }
+  }, [isAdmin, selectedSubject, setFilter, subjectFilterOptions]);
 
   return (
     <div className="space-y-4">
       {/* Top row: Title + Date + View toggle */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold text-gray-800">Attendance</h1>
+        <h1 className="text-2xl font-bold text-gray-800">
+          {isAdmin ? 'Teacher Attendance Tracking' : 'Student Attendance'}
+        </h1>
 
         <div className="flex items-center gap-3">
           {/* Date navigation */}
@@ -91,19 +121,14 @@ export default function FilterBar() {
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white rounded-xl p-4 shadow-card">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <Select
-            options={classOptions}
+            options={classFilterOptions}
             value={selectedClass}
             onChange={(val) => setFilter('selectedClass', val)}
           />
           <Select
-            options={subjectOptions}
+            options={subjectFilterOptions}
             value={selectedSubject}
             onChange={(val) => setFilter('selectedSubject', val)}
-          />
-          <Select
-            options={shiftOptions}
-            value={selectedShift}
-            onChange={(val) => setFilter('selectedShift', val)}
           />
         </div>
 
@@ -113,7 +138,7 @@ export default function FilterBar() {
           loading={isSubmitting}
           onClick={() => submitAttendance(filteredStudents.map((s) => s.id), filteredStudents)}
         >
-          {isSubmitting ? 'Submitting...' : 'Take Attendance'}
+          {isSubmitting ? 'Submitting...' : (isAdmin ? 'Track Teacher Attendance' : 'Take Attendance')}
         </Button>
       </div>
     </div>

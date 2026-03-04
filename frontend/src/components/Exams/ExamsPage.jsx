@@ -1,17 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 
 import { motion } from 'framer-motion';
 import {
-  HiOutlinePlus,
   HiOutlineCalendar,
   HiOutlineClipboardList,
-  HiOutlineUsers,
   HiOutlineDocumentDownload,
+  HiOutlinePlus,
+  HiOutlineSpeakerphone,
+  HiOutlineUsers,
 } from 'react-icons/hi';
 
 import { ACCOUNT_ROLES, normalizeRole } from '../../constants/roles';
 import { useAuth } from '../../context/AuthContext';
-import { classOptions } from '../../data/students';
+import { classOptions, subjectOptions } from '../../data/students';
 import { examsAPI } from '../../services/api';
 import Badge from '../common/Badge';
 import Button from '../common/Button';
@@ -25,25 +26,84 @@ const examStatusColors = {
   cancelled: 'bg-red-100 text-red-700',
 };
 
+const LOCAL_EXAM_ANNOUNCEMENTS_KEY = 'exam_announcements_local_v1';
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.onerror = () => reject(new Error('Unable to read file.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function normalizeAnnouncement(item) {
+  return {
+    id: item?.id || `exam-announcement-${Date.now()}`,
+    title: String(item?.title || 'Exam Announcement').trim(),
+    examDate: String(item?.examDate || '').trim(),
+    examTime: String(item?.examTime || '').trim(),
+    classCode: String(item?.classCode || 'ALL').trim() || 'ALL',
+    message: String(item?.message || '').trim(),
+    attachmentName: String(item?.attachmentName || '').trim(),
+    attachmentType: String(item?.attachmentType || '').trim(),
+    attachmentDataUrl: String(item?.attachmentDataUrl || '').trim(),
+    postedAt: item?.postedAt || new Date().toISOString(),
+    postedBy: String(item?.postedBy || 'Admin Center').trim(),
+  };
+}
+
+function readAnnouncements() {
+  try {
+    const raw = localStorage.getItem(LOCAL_EXAM_ANNOUNCEMENTS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.map(normalizeAnnouncement) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeAnnouncements(items) {
+  const next = (Array.isArray(items) ? items : []).map(normalizeAnnouncement);
+  localStorage.setItem(LOCAL_EXAM_ANNOUNCEMENTS_KEY, JSON.stringify(next));
+  return next;
+}
+
 export default function ExamsPage() {
   const { user } = useAuth();
-  const isTeacher = normalizeRole(user?.role) === ACCOUNT_ROLES.TEACHER;
+  const role = normalizeRole(user?.role);
+  const isAdmin = role === ACCOUNT_ROLES.ADMIN;
+  const isStudent = role === ACCOUNT_ROLES.STUDENT;
+  const studentClassCode = String(user?.class || '').trim();
   const [exams, setExams] = useState([]);
+  const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
   const [selectedExam, setSelectedExam] = useState(null);
 
   useEffect(() => {
     loadExams();
+    setAnnouncements(readAnnouncements());
+
+    const onStorage = (event) => {
+      if (event.key === LOCAL_EXAM_ANNOUNCEMENTS_KEY) {
+        setAnnouncements(readAnnouncements());
+      }
+    };
+
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
   }, []);
 
   const loadExams = async () => {
     setLoading(true);
     try {
       const response = await examsAPI.getAll();
-      setExams(response.data);
+      setExams(Array.isArray(response?.data) ? response.data : []);
     } catch (error) {
       console.error('Failed to load exams:', error);
+      setExams([]);
     } finally {
       setLoading(false);
     }
@@ -107,14 +167,14 @@ export default function ExamsPage() {
       accessor: 'status',
       render: (value) => (
         <Badge variant={examStatusColors[value]}>
-          {value.charAt(0).toUpperCase() + value.slice(1)}
+          {String(value || '').charAt(0).toUpperCase() + String(value || '').slice(1)}
         </Badge>
       ),
     },
     {
       header: 'Actions',
       accessor: 'id',
-      render: (value, row) => (
+      render: (_value, row) => (
         <div className="flex items-center gap-2">
           <Button
             variant="secondary"
@@ -141,38 +201,119 @@ export default function ExamsPage() {
     },
   ];
 
+  const visibleExams = isStudent && studentClassCode
+    ? exams.filter((exam) => String(exam?.class || '').trim() === studentClassCode)
+    : exams;
+  const visibleAnnouncements = isStudent && studentClassCode
+    ? announcements.filter((item) => item.classCode === 'ALL' || item.classCode === studentClassCode)
+    : announcements;
+
   const stats = [
-    { label: 'Total Exams', value: exams.length, icon: HiOutlineClipboardList, color: 'bg-blue-500' },
-    { label: 'Upcoming', value: exams.filter(e => e.status === 'scheduled').length, icon: HiOutlineCalendar, color: 'bg-yellow-500' },
-    { label: 'Ongoing', value: exams.filter(e => e.status === 'ongoing').length, icon: HiOutlineClipboardList, color: 'bg-green-500' },
-    { label: 'Completed', value: exams.filter(e => e.status === 'completed').length, icon: HiOutlineUsers, color: 'bg-purple-500' },
+    { label: 'Total Exams', value: visibleExams.length, icon: HiOutlineClipboardList, color: 'bg-blue-500' },
+    { label: 'Upcoming', value: visibleExams.filter((e) => e.status === 'scheduled').length, icon: HiOutlineCalendar, color: 'bg-yellow-500' },
+    { label: 'Ongoing', value: visibleExams.filter((e) => e.status === 'ongoing').length, icon: HiOutlineClipboardList, color: 'bg-green-500' },
+    { label: 'Completed', value: visibleExams.filter((e) => e.status === 'completed').length, icon: HiOutlineUsers, color: 'bg-purple-500' },
   ];
+
+  const handleCreateAnnouncement = (payload) => {
+    const next = writeAnnouncements([normalizeAnnouncement(payload), ...announcements]);
+    setAnnouncements(next);
+    setShowAnnouncementModal(false);
+  };
+
+  const openAttachment = (item) => {
+    const href = String(item?.attachmentDataUrl || '').trim();
+    if (!href) return;
+
+    const a = document.createElement('a');
+    a.href = href;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    if (!href.startsWith('data:image/')) {
+      a.download = item.attachmentName || 'exam-announcement-file';
+    }
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">
-            {isTeacher ? 'Exams List' : 'Exam Schedule'}
-          </h1>
+          <h1 className="text-2xl font-bold text-gray-800">Exam Schedule</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {isTeacher ? 'Manage examinations and results' : 'View your exam schedule and details'}
+            {isAdmin
+              ? 'Upload and manage the exam schedule as School Management.'
+              : 'View the official exam schedule uploaded by School Management.'}
           </p>
         </div>
-        {isTeacher && (
-          <Button
-            variant="primary"
-            size="lg"
-            icon={HiOutlinePlus}
-            onClick={() => setShowCreateModal(true)}
-          >
-            Schedule Exam
-          </Button>
+        {isAdmin && (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="lg"
+              icon={HiOutlineSpeakerphone}
+              onClick={() => setShowAnnouncementModal(true)}
+            >
+              Post Announcement
+            </Button>
+            <Button
+              variant="primary"
+              size="lg"
+              icon={HiOutlinePlus}
+              onClick={() => setShowCreateModal(true)}
+            >
+              Upload Exam Schedule
+            </Button>
+          </div>
         )}
       </div>
 
-      {/* Stats */}
+      <div className="bg-white rounded-xl shadow-card p-4">
+        <h2 className="text-sm font-semibold text-gray-800 mb-3">Exam Announcements</h2>
+        {visibleAnnouncements.length === 0 ? (
+          <p className="text-sm text-gray-500">No announcement posted yet.</p>
+        ) : (
+          <div className="space-y-3">
+            {visibleAnnouncements.slice(0, 10).map((item) => (
+              <div key={item.id} className="border border-gray-200 rounded-lg p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">{item.title}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Class: {item.classCode === 'ALL' ? 'All Classes' : item.classCode} | Date: {item.examDate || '-'} | Time: {item.examTime || '-'} | Posted by {item.postedBy}
+                    </p>
+                  </div>
+                  <p className="text-[11px] text-gray-400">{new Date(item.postedAt).toLocaleString()}</p>
+                </div>
+                {item.message && (
+                  <p className="text-sm text-gray-700 mt-2 whitespace-pre-wrap">{item.message}</p>
+                )}
+                {item.attachmentDataUrl && (
+                  <div className="mt-2">
+                    {item.attachmentType.startsWith('image/') ? (
+                      <img
+                        src={item.attachmentDataUrl}
+                        alt={item.attachmentName || 'announcement attachment'}
+                        className="max-h-48 rounded border border-gray-200"
+                      />
+                    ) : null}
+                    <button
+                      type="button"
+                      className="text-sm text-primary-700 hover:underline mt-2"
+                      onClick={() => openAttachment(item)}
+                    >
+                      Open Attachment{item.attachmentName ? ` (${item.attachmentName})` : ''}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat, index) => (
           <motion.div
@@ -195,39 +336,48 @@ export default function ExamsPage() {
         ))}
       </div>
 
-      {/* Exams table */}
       <DataTable
         columns={columns}
-        data={exams}
+        data={visibleExams}
         loading={loading}
         onRowClick={(row) => setSelectedExam(row)}
       />
 
-      {/* Create Exam Modal */}
       <Modal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        title="Schedule New Exam"
+        title="Upload Exam Schedule"
       >
-        <CreateExamForm onSuccess={() => {
-          setShowCreateModal(false);
-          loadExams();
-        }} />
+        <CreateExamForm
+          onSuccess={() => {
+            setShowCreateModal(false);
+            loadExams();
+          }}
+        />
       </Modal>
 
-      {/* View Exam Modal */}
+      <Modal
+        isOpen={showAnnouncementModal}
+        onClose={() => setShowAnnouncementModal(false)}
+        title="Post Exam Announcement"
+      >
+        <ExamAnnouncementForm onSubmit={handleCreateAnnouncement} postedBy="Admin Center" />
+      </Modal>
+
       <Modal
         isOpen={selectedExam}
         onClose={() => setSelectedExam(null)}
         title={selectedExam?.name}
       >
-        {selectedExam && <ExamDetails exam={selectedExam} isTeacher={isTeacher} />}
+        {selectedExam && <ExamDetails exam={selectedExam} isAdmin={isAdmin} />}
       </Modal>
     </div>
   );
 }
 
 function CreateExamForm({ onSuccess }) {
+  const examSubjectOptions = subjectOptions.filter((item) => item.value);
+
   const [formData, setFormData] = useState({
     name: '',
     subject: '',
@@ -241,7 +391,7 @@ function CreateExamForm({ onSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await examsAPI.create(formData);
+      await examsAPI.create({ ...formData, uploadedBy: 'School Management' });
       onSuccess();
     } catch (error) {
       console.error('Failed to create exam:', error);
@@ -277,12 +427,11 @@ function CreateExamForm({ onSuccess }) {
             className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
             <option value="">Select subject</option>
-            <option value="Mathematics">Mathematics</option>
-            <option value="Science">Science</option>
-            <option value="English">English</option>
-            <option value="French">French</option>
-            <option value="History">History</option>
-            <option value="Computer">Computer Science</option>
+            {examSubjectOptions.map((item) => (
+              <option key={item.value} value={item.label}>
+                {item.label}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -304,6 +453,10 @@ function CreateExamForm({ onSuccess }) {
             ))}
           </select>
         </div>
+      </div>
+
+      <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+        Publisher: School Management
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -332,7 +485,7 @@ function CreateExamForm({ onSuccess }) {
             min="15"
             step="15"
             value={formData.duration}
-            onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value) })}
+            onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value, 10) || 0 })}
             className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
         </div>
@@ -349,7 +502,7 @@ function CreateExamForm({ onSuccess }) {
             required
             min="1"
             value={formData.totalMarks}
-            onChange={(e) => setFormData({ ...formData, totalMarks: parseInt(e.target.value) })}
+            onChange={(e) => setFormData({ ...formData, totalMarks: parseInt(e.target.value, 10) || 0 })}
             className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
         </div>
@@ -364,18 +517,14 @@ function CreateExamForm({ onSuccess }) {
             required
             min="1"
             value={formData.passingMarks}
-            onChange={(e) => setFormData({ ...formData, passingMarks: parseInt(e.target.value) })}
+            onChange={(e) => setFormData({ ...formData, passingMarks: parseInt(e.target.value, 10) || 0 })}
             className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
         </div>
       </div>
 
       <div className="flex justify-end gap-3 mt-6">
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() => onSuccess()}
-        >
+        <Button type="button" variant="secondary" onClick={() => onSuccess()}>
           Cancel
         </Button>
         <Button type="submit" variant="primary">
@@ -386,7 +535,141 @@ function CreateExamForm({ onSuccess }) {
   );
 }
 
-function ExamDetails({ exam, isTeacher }) {
+function ExamAnnouncementForm({ onSubmit, postedBy }) {
+  const [formData, setFormData] = useState({
+    title: '',
+    examDate: '',
+    examTime: '',
+    classCode: 'ALL',
+    message: '',
+  });
+  const [attachment, setAttachment] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      let attachmentDataUrl = '';
+      let attachmentName = '';
+      let attachmentType = '';
+      if (attachment) {
+        attachmentDataUrl = await fileToDataUrl(attachment);
+        attachmentName = attachment.name;
+        attachmentType = attachment.type || '';
+      }
+
+      onSubmit({
+        ...formData,
+        attachmentDataUrl,
+        attachmentName,
+        attachmentType,
+        postedBy,
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-3">
+      <div>
+        <label htmlFor="announcement-title" className="block text-sm font-medium text-gray-700 mb-1">
+          Announcement Title
+        </label>
+        <input
+          id="announcement-title"
+          type="text"
+          required
+          value={formData.title}
+          onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label htmlFor="announcement-date" className="block text-sm font-medium text-gray-700 mb-1">
+            Exam Date
+          </label>
+          <input
+            id="announcement-date"
+            type="date"
+            value={formData.examDate}
+            onChange={(e) => setFormData((prev) => ({ ...prev, examDate: e.target.value }))}
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+          />
+        </div>
+        <div>
+          <label htmlFor="announcement-time" className="block text-sm font-medium text-gray-700 mb-1">
+            Exam Time
+          </label>
+          <input
+            id="announcement-time"
+            type="time"
+            value={formData.examTime}
+            onChange={(e) => setFormData((prev) => ({ ...prev, examTime: e.target.value }))}
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label htmlFor="announcement-class" className="block text-sm font-medium text-gray-700 mb-1">
+          Target Class
+        </label>
+        <select
+          id="announcement-class"
+          value={formData.classCode}
+          onChange={(e) => setFormData((prev) => ({ ...prev, classCode: e.target.value }))}
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+        >
+          <option value="ALL">All Classes</option>
+          {classOptions.filter((opt) => opt.value).map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.value}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label htmlFor="announcement-message" className="block text-sm font-medium text-gray-700 mb-1">
+          Message
+        </label>
+        <textarea
+          id="announcement-message"
+          rows={3}
+          value={formData.message}
+          onChange={(e) => setFormData((prev) => ({ ...prev, message: e.target.value }))}
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+          placeholder="Announcement details for all users..."
+        />
+      </div>
+
+      <div>
+        <label htmlFor="announcement-file" className="block text-sm font-medium text-gray-700 mb-1">
+          Attachment (Image or File)
+        </label>
+        <input
+          id="announcement-file"
+          type="file"
+          accept="image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip,.rar"
+          onChange={(e) => setAttachment(e.target.files?.[0] || null)}
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 file:mr-3 file:px-3 file:py-1.5 file:border-0 file:rounded-md file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
+        />
+      </div>
+
+      <div className="flex justify-end">
+        <Button type="submit" loading={saving}>
+          Post Announcement
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function ExamDetails({ exam, isAdmin }) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4">
@@ -400,9 +683,7 @@ function ExamDetails({ exam, isTeacher }) {
         </div>
         <div className="p-4 bg-gray-50 rounded-lg">
           <p className="text-xs text-gray-500">Date & Time</p>
-          <p className="text-sm font-medium text-gray-800 mt-1">
-            {new Date(exam.date).toLocaleString()}
-          </p>
+          <p className="text-sm font-medium text-gray-800 mt-1">{new Date(exam.date).toLocaleString()}</p>
         </div>
         <div className="p-4 bg-gray-50 rounded-lg">
           <p className="text-xs text-gray-500">Duration</p>
@@ -415,6 +696,10 @@ function ExamDetails({ exam, isTeacher }) {
         <div className="p-4 bg-gray-50 rounded-lg">
           <p className="text-xs text-gray-500">Passing Marks</p>
           <p className="text-sm font-medium text-gray-800 mt-1">{exam.passingMarks}</p>
+        </div>
+        <div className="p-4 bg-gray-50 rounded-lg">
+          <p className="text-xs text-gray-500">Uploaded By</p>
+          <p className="text-sm font-medium text-gray-800 mt-1">{exam.uploadedBy || 'School Management'}</p>
         </div>
       </div>
 
@@ -438,7 +723,7 @@ function ExamDetails({ exam, isTeacher }) {
         </div>
       )}
 
-      {isTeacher ? (
+      {isAdmin ? (
         <div className="flex justify-end gap-3">
           <Button variant="secondary">Edit</Button>
           {exam.status === 'completed' && (
@@ -446,9 +731,7 @@ function ExamDetails({ exam, isTeacher }) {
               Download Results
             </Button>
           )}
-          {exam.status === 'scheduled' && (
-            <Button variant="success">Start Exam</Button>
-          )}
+          {exam.status === 'scheduled' && <Button variant="success">Start Exam</Button>}
         </div>
       ) : null}
     </div>

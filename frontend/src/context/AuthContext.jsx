@@ -48,14 +48,10 @@ function authReducer(state, action) {
 function normalizeUser(user) {
   if (!user) return user;
   const normalizedRole = normalizeRole(user.role);
-  const isAdminCenterMember = Boolean(user.isAdminCenterMember);
   return {
     ...user,
     role: normalizedRole,
-    roleLabel: isAdminCenterMember
-      ? `${getRoleLabel(normalizedRole)} - Admin Center`
-      : getRoleLabel(normalizedRole),
-    isAdminCenterMember,
+    roleLabel: getRoleLabel(normalizedRole),
   };
 }
 
@@ -92,7 +88,7 @@ function getStudentAccounts() {
 export function AuthProvider({ children }) {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
-  const login = useCallback(async (email, password, selectedRole = ACCOUNT_ROLES.TEACHER) => {
+  const login = useCallback(async (email, password, selectedRole = null) => {
     dispatch({ type: 'LOGIN_START' });
     try {
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -105,22 +101,30 @@ export function AuthProvider({ children }) {
           .filter(Boolean)
           .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
           .join(' ');
-        const normalizedRole = normalizeRole(selectedRole);
         const isAdminCenterMember = ADMIN_CENTER_EMAILS.includes(normalizedEmail);
         let matchedStudent = null;
+        const studentAccounts = getStudentAccounts();
+        matchedStudent = studentAccounts.find((student) => String(student.email || '').toLowerCase() === normalizedEmail);
 
-        if (normalizedRole === ACCOUNT_ROLES.TEACHER) {
+        const inferredRole = isAdminCenterMember
+          ? ACCOUNT_ROLES.ADMIN
+          : (matchedStudent ? ACCOUNT_ROLES.STUDENT : ACCOUNT_ROLES.TEACHER);
+        const normalizedRole = selectedRole ? normalizeRole(selectedRole) : inferredRole;
+
+        if (normalizedRole === ACCOUNT_ROLES.ADMIN) {
           if (!isAdminCenterMember) {
-            throw new Error('Teacher access is restricted to Admin Center members.');
+            throw new Error('This email is not in the Admin Center list.');
           }
           if (password !== ADMIN_CENTER_PASSWORD) {
             throw new Error('Invalid Admin Center password.');
           }
         }
 
+        if (normalizedRole === ACCOUNT_ROLES.TEACHER && isAdminCenterMember) {
+          throw new Error('This account is reserved for Admin Center. Please choose Admin Center role.');
+        }
+
         if (normalizedRole === ACCOUNT_ROLES.STUDENT) {
-          const studentAccounts = getStudentAccounts();
-          matchedStudent = studentAccounts.find((student) => String(student.email || '').toLowerCase() === normalizedEmail);
           if (!matchedStudent) {
             throw new Error('Student email was not found. Please use the email from Student Lookup.');
           }
@@ -135,9 +139,7 @@ export function AuthProvider({ children }) {
           name: matchedStudent?.name || formattedName || 'User',
           email: normalizedEmail,
           role: normalizedRole,
-          roleLabel: isAdminCenterMember
-            ? `${getRoleLabel(normalizedRole)} - Admin Center`
-            : getRoleLabel(normalizedRole),
+          roleLabel: getRoleLabel(normalizedRole),
           isAdminCenterMember,
           phone: '',
           avatar: matchedStudent?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${normalizedEmail}`,
@@ -151,7 +153,7 @@ export function AuthProvider({ children }) {
         dispatch({ type: 'LOGIN_SUCCESS', payload: user });
         localStorage.setItem('auth_user', JSON.stringify(user));
         localStorage.setItem('auth_token', 'mock-jwt-token-' + Date.now());
-        return { success: true };
+        return { success: true, role: normalizedRole };
       } else {
         throw new Error('Invalid credentials');
       }
@@ -207,8 +209,13 @@ export function AuthProvider({ children }) {
       nextUser.rollNo = state.user.rollNo;
       nextUser.dateOfBirth = state.user.dateOfBirth;
       nextUser.isAdminCenterMember = false;
+    } else if (currentRole === ACCOUNT_ROLES.ADMIN) {
+      nextUser.role = ACCOUNT_ROLES.ADMIN;
+      nextUser.isAdminCenterMember = true;
     } else {
-      nextUser.role = normalizeRole(nextUser.role);
+      // Teachers cannot escalate role from profile editing.
+      nextUser.role = ACCOUNT_ROLES.TEACHER;
+      nextUser.isAdminCenterMember = false;
     }
 
     const normalizedRole = normalizeRole(nextUser.role);

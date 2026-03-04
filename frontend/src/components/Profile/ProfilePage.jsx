@@ -19,6 +19,21 @@ function InfoCard({ icon: Icon, label, value }) {
   );
 }
 
+function formatClassLabel(classCode, section) {
+  const baseClass = String(classCode || '').trim();
+  const baseSection = String(section || '').trim();
+  if (!baseClass) return baseSection;
+  if (!baseSection) return baseClass;
+
+  const normalizedClass = baseClass.toUpperCase();
+  const normalizedSection = baseSection.toUpperCase();
+  if (normalizedClass.endsWith(normalizedSection)) {
+    return baseClass;
+  }
+
+  return `${baseClass} ${baseSection}`.trim();
+}
+
 export default function ProfilePage() {
   const { user, updateProfile } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
@@ -47,7 +62,7 @@ export default function ProfilePage() {
     ...(isStudent
       ? [
           { icon: HiOutlineIdentification, label: 'Student ID', value: textValue('studentId') },
-          { icon: HiOutlineAcademicCap, label: 'Class', value: `${textValue('class')} ${textValue('section')}`.trim() },
+          { icon: HiOutlineAcademicCap, label: 'Class', value: formatClassLabel(textValue('class'), textValue('section')) },
           { icon: HiOutlineCalendar, label: 'Date of Birth', value: textValue('dateOfBirth') },
         ]
       : []),
@@ -226,11 +241,12 @@ export default function ProfilePage() {
                 id="profile-role"
                 value={normalizeRole(valueFor('role'))}
                 onChange={(e) => onChange('role', e.target.value)}
-                disabled={isStudent}
+                disabled
                 className={`w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white ${
-                  isStudent ? 'bg-gray-50 text-gray-600 cursor-not-allowed' : ''
+                  'bg-gray-50 text-gray-600 cursor-not-allowed'
                 }`}
               >
+                <option value={ACCOUNT_ROLES.ADMIN}>{ROLE_LABELS[ACCOUNT_ROLES.ADMIN]}</option>
                 <option value={ACCOUNT_ROLES.STUDENT}>{ROLE_LABELS[ACCOUNT_ROLES.STUDENT]}</option>
                 <option value={ACCOUNT_ROLES.TEACHER}>{ROLE_LABELS[ACCOUNT_ROLES.TEACHER]}</option>
               </select>

@@ -3,11 +3,8 @@ import React, { useMemo, useState } from 'react';
 import { ACCOUNT_ROLES, normalizeRole } from '../../constants/roles';
 import { useAuth } from '../../context/AuthContext';
 import {
-  PERIOD_DURATION_OPTIONS,
-  SHIFT_OPTIONS,
   TRACK_OPTIONS,
   generateOfficialTimetable,
-  generatePratTimetable,
   getCurriculumByClass,
   getGradeFromClassCode,
   scheduleClassOptions,
@@ -16,6 +13,8 @@ import Select from '../common/Select';
 
 const CURRICULUM_STORAGE_KEY = 'curriculum_overrides_v1';
 const SCHEDULE_TABLE_STORAGE_KEY = 'schedule_table_overrides_v1';
+const FIXED_PERIOD_MINUTES = 50;
+const FIXED_SHIFT = 'Both';
 
 function subjectClassName(subject) {
   const palette = [
@@ -36,13 +35,12 @@ function subjectClassName(subject) {
 export default function SchedulePage() {
   const { user } = useAuth();
   const role = normalizeRole(user?.role);
-  const isTeacher = role === ACCOUNT_ROLES.TEACHER;
+  const isAdmin = role === ACCOUNT_ROLES.ADMIN;
+  const isStudent = role === ACCOUNT_ROLES.STUDENT;
+  const studentClassCode = String(user?.class || '').trim();
 
-  const [selectedClass, setSelectedClass] = useState('12A');
+  const [selectedClass, setSelectedClass] = useState(() => studentClassCode || scheduleClassOptions[0]?.value || '7A');
   const [track, setTrack] = useState('science');
-  const [shift, setShift] = useState('Morning');
-  const [periodMinutes, setPeriodMinutes] = useState('45');
-  const [includePrat, setIncludePrat] = useState(true);
   const [isEditingCurriculum, setIsEditingCurriculum] = useState(false);
   const [curriculumDraft, setCurriculumDraft] = useState(null);
   const [isEditingTable, setIsEditingTable] = useState(false);
@@ -50,6 +48,7 @@ export default function SchedulePage() {
 
   const grade = useMemo(() => getGradeFromClassCode(selectedClass), [selectedClass]);
   const trackEnabled = grade >= 11;
+  const effectiveTrack = trackEnabled ? track : 'science';
   const curriculumKey = `${selectedClass}-${trackEnabled ? track : 'general'}`;
 
   const readSavedCurriculumMap = () => {
@@ -65,7 +64,7 @@ export default function SchedulePage() {
   const savedCurriculumMap = readSavedCurriculumMap();
 
   const curriculumOverride = savedCurriculumMap[curriculumKey] || null;
-  const tableKey = `${curriculumKey}-${shift}-${periodMinutes}`;
+  const tableKey = `${curriculumKey}-${FIXED_SHIFT}-${FIXED_PERIOD_MINUTES}`;
 
   const readSavedTableMap = () => {
     try {
@@ -83,18 +82,14 @@ export default function SchedulePage() {
     () =>
       generateOfficialTimetable({
         classCode: selectedClass,
-        track,
-        shift,
-        periodMinutes: Number(periodMinutes),
+        track: effectiveTrack,
+        shift: FIXED_SHIFT,
+        periodMinutes: FIXED_PERIOD_MINUTES,
         curriculumOverride,
       }),
-    [selectedClass, track, shift, periodMinutes, curriculumOverride]
+    [selectedClass, effectiveTrack, curriculumOverride]
   );
 
-  const pratData = useMemo(() => generatePratTimetable(track), [track]);
-  const extraHours = includePrat ? pratData.weeklyHoursRange : [0, 0];
-  const totalMinHours = Number((scheduleData.officialHours + extraHours[0]).toFixed(1));
-  const totalMaxHours = Number((scheduleData.officialHours + extraHours[1]).toFixed(1));
   const savedRowsOverride = Array.isArray(savedTableMap[tableKey]) ? savedTableMap[tableKey] : null;
   const renderedRows = isEditingTable && tableDraftRows ? tableDraftRows : (savedRowsOverride || scheduleData.rows);
   const editableSubjects = useMemo(() => {
@@ -108,7 +103,7 @@ export default function SchedulePage() {
   }, [scheduleData.rows, scheduleData.dayKeys]);
 
   const startEditCurriculum = () => {
-    const baseCurriculum = curriculumOverride || getCurriculumByClass(selectedClass, track);
+    const baseCurriculum = curriculumOverride || getCurriculumByClass(selectedClass, effectiveTrack);
     setCurriculumDraft({
       notes: baseCurriculum.notes || '',
       subjects: (baseCurriculum.subjects || []).map((subject, idx) => ({
@@ -136,7 +131,7 @@ export default function SchedulePage() {
 
     const payload = {
       grade,
-      track: trackEnabled ? (track === 'social' ? 'Social Science' : 'Science') : null,
+      track: trackEnabled ? (effectiveTrack === 'social' ? 'Social Science' : 'Science') : null,
       totalPeriodsRange: [cleanedSubjects.reduce((sum, item) => sum + item.periods, 0), cleanedSubjects.reduce((sum, item) => sum + item.periods, 0)],
       subjects: cleanedSubjects,
       notes: curriculumDraft.notes.trim() || 'Teacher customized curriculum.',
@@ -185,53 +180,35 @@ export default function SchedulePage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-800">Class Schedule</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Cambodian public school model: Monday-Saturday, 45-50 minute periods, with optional Prat classes.
+          Cambodian public school model: Monday-Saturday fixed period timetable aligned with the official curriculum.
         </p>
       </div>
 
-      <div className="bg-white rounded-xl shadow-card p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="bg-white rounded-xl shadow-card p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
         <Select
           options={scheduleClassOptions}
           value={selectedClass}
           onChange={setSelectedClass}
           className="w-full"
-        />
-        <Select
-          options={SHIFT_OPTIONS}
-          value={shift}
-          onChange={setShift}
-          className="w-full"
-        />
-        <Select
-          options={PERIOD_DURATION_OPTIONS}
-          value={periodMinutes}
-          onChange={setPeriodMinutes}
-          className="w-full"
+          disabled={isStudent}
         />
         <Select
           options={TRACK_OPTIONS}
           value={track}
           onChange={setTrack}
           className="w-full"
+          disabled={!trackEnabled}
         />
-        <label className="flex items-center gap-2 text-sm text-gray-700 px-3 py-2 border border-gray-200 rounded-lg">
-          <input
-            type="checkbox"
-            checked={includePrat}
-            onChange={(e) => setIncludePrat(e.target.checked)}
-            className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-          />
-          Include Prat (Extra Class)
-        </label>
       </div>
 
       {!trackEnabled && (
         <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-sm text-blue-700">
-          Grade {grade} uses the national general foundation curriculum (no track selection yet).
+          Grade {grade} uses the national general foundation curriculum.
+          Track options are enabled from Grade 11 onward.
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="bg-white rounded-xl p-4 shadow-card text-center">
           <p className="text-xs text-gray-500">Official Weekly Periods</p>
           <p className="text-2xl font-bold text-gray-800 mt-1">{scheduleData.weeklyPeriods}</p>
@@ -241,16 +218,8 @@ export default function SchedulePage() {
           <p className="text-2xl font-bold text-blue-600 mt-1">{scheduleData.officialHours}</p>
         </div>
         <div className="bg-white rounded-xl p-4 shadow-card text-center">
-          <p className="text-xs text-gray-500">Extra (Prat) Hours/Week</p>
-          <p className="text-2xl font-bold text-orange-600 mt-1">
-            {includePrat ? `${extraHours[0]}-${extraHours[1]}` : '0'}
-          </p>
-        </div>
-        <div className="bg-white rounded-xl p-4 shadow-card text-center">
           <p className="text-xs text-gray-500">Total Study Load/Week</p>
-          <p className="text-2xl font-bold text-green-600 mt-1">
-            {includePrat ? `${totalMinHours}-${totalMaxHours}` : scheduleData.officialHours}
-          </p>
+          <p className="text-2xl font-bold text-green-600 mt-1">{scheduleData.officialHours}</p>
         </div>
       </div>
 
@@ -259,7 +228,7 @@ export default function SchedulePage() {
           <h2 className="text-sm font-semibold text-gray-800">
             Curriculum Basis - Grade {grade}{scheduleData.track ? ` (${scheduleData.track} Track)` : ''}
           </h2>
-          {isTeacher && (
+          {isAdmin && (
             <div className="flex items-center gap-2">
               {!isEditingCurriculum ? (
                 <>
@@ -379,7 +348,7 @@ export default function SchedulePage() {
       </div>
 
       <div className="bg-white rounded-xl shadow-card overflow-hidden">
-        {isTeacher && (
+        {isAdmin && (
           <div className="px-4 pt-4 pb-2 flex items-center justify-end gap-2">
             {!isEditingTable ? (
               <>
@@ -448,7 +417,7 @@ export default function SchedulePage() {
                   </td>
                   {scheduleData.dayKeys.map((day) => (
                     <td key={day} className="px-4 py-3">
-                      {isTeacher && isEditingTable ? (
+                      {isAdmin && isEditingTable ? (
                         <select
                           value={row[day]}
                           onChange={(e) =>
@@ -483,26 +452,6 @@ export default function SchedulePage() {
           </table>
         </div>
       </div>
-
-      {includePrat && (
-        <div className="bg-white rounded-xl shadow-card p-5">
-          <h2 className="text-lg font-semibold text-gray-800 mb-2">Prat (Extra Class) Plan</h2>
-          <p className="text-sm text-gray-600">
-            Recommended extra class block: <span className="font-medium">{pratData.timeRange}</span>
-            {' '}focused on Bac II subjects.
-          </p>
-          <div className="flex flex-wrap gap-2 mt-3">
-            {pratData.focusSubjects.map((subject) => (
-              <span
-                key={subject}
-                className={`inline-block px-3 py-1.5 rounded-lg text-xs font-medium border ${subjectClassName(subject)}`}
-              >
-                {subject}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

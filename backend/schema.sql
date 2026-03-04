@@ -1,0 +1,22 @@
+CREATE DATABASE IF NOT EXISTS class_management;
+USE class_management;
+
+CREATE TABLE IF NOT EXISTS users (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  email VARCHAR(150) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  role ENUM('admin', 'teacher', 'student') NOT NULL,
+  full_name VARCHAR(120) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS students (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  student_code VARCHAR(50) NOT NULL UNIQUE,
+  full_name VARCHAR(120) NOT NULL,
+  class_name VARCHAR(20) NOT NULL,
+  section VARCHAR(5) NOT NULL,
+  gender VARCHAR(20) NULL,
+  dob DATE NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

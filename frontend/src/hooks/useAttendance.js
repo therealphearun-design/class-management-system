@@ -1,25 +1,47 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { format } from 'date-fns';
 
+import { ACCOUNT_ROLES, normalizeRole } from '../constants/roles';
 import { useAttendanceContext } from '../context/AttendanceContext';
+import { useAuth } from '../context/AuthContext';
 import { studentsData } from '../data/students';
+import { loadTeachers } from '../data/teachers';
 
 export function useFilteredStudents() {
-  const { selectedClass, selectedShift } = useAttendanceContext();
+  const { user } = useAuth();
+  const role = normalizeRole(user?.role);
+  const isAdmin = role === ACCOUNT_ROLES.ADMIN;
+  const { selectedClass, selectedShift, selectedSubject } = useAttendanceContext();
+  const [teachers, setTeachers] = useState(() => (isAdmin ? loadTeachers() : []));
+
+  useEffect(() => {
+    if (!isAdmin) return undefined;
+    const refreshTeachers = () => setTeachers(loadTeachers());
+    refreshTeachers();
+    window.addEventListener('teachers-updated', refreshTeachers);
+    window.addEventListener('storage', refreshTeachers);
+    return () => {
+      window.removeEventListener('teachers-updated', refreshTeachers);
+      window.removeEventListener('storage', refreshTeachers);
+    };
+  }, [isAdmin]);
 
   const filteredStudents = useMemo(() => {
-    let students = [...studentsData];
+    let students = isAdmin ? [...teachers] : [...studentsData];
 
     if (selectedClass) {
       students = students.filter(s => s.class === selectedClass);
     }
-    if (selectedShift) {
+    if (!isAdmin && selectedShift) {
       students = students.filter(s => s.shift === selectedShift);
+    }
+    if (isAdmin && selectedSubject) {
+      students = students.filter((teacher) => teacher.subject === selectedSubject);
     }
 
     return students;
-  }, [selectedClass, selectedShift]);
+  }, [isAdmin, selectedClass, selectedShift, selectedSubject, teachers]);
 
   const groupedStudents = useMemo(() => {
     const groups = {};

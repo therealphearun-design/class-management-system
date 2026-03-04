@@ -8,11 +8,9 @@ import {
   HiOutlineDocumentText,
   HiOutlineBookOpen,
   HiOutlineAcademicCap,
-  HiOutlineBadgeCheck,
   HiOutlineChartBar,
   HiOutlineMail,
   HiOutlineClock,
-  HiOutlineClipboardList,
   HiOutlineUser,
   HiOutlineSearch,
 } from 'react-icons/hi';
@@ -22,20 +20,18 @@ import { ACCOUNT_ROLES, normalizeRole } from '../../constants/roles';
 import { useAuth } from '../../context/AuthContext';
 
 const menuItems = [
-  { path: '/dashboard', icon: HiOutlineHome, label: 'Dashboard', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },
-  { path: '/attendance', icon: HiOutlineClipboardCheck, label: 'Attendance', roles: [ACCOUNT_ROLES.TEACHER] },
-  { path: '/students', icon: HiOutlineUserGroup, label: 'Students', roles: [ACCOUNT_ROLES.TEACHER] },
-  { path: '/student-lookup', icon: HiOutlineSearch, label: 'Student Lookup', roles: [ACCOUNT_ROLES.TEACHER] },
-  { path: '/schedule', icon: HiOutlineCalendar, label: 'Class Schedule', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },
-  { path: '/marksheets', icon: HiOutlineDocumentText, label: 'Marksheets', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },
+  { path: '/dashboard', icon: HiOutlineHome, label: 'Dashboard', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN] },
+  { path: '/attendance', icon: HiOutlineClipboardCheck, label: 'Attendance', roles: [ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN] },
+  { path: '/students', icon: HiOutlineUserGroup, label: 'Students', roles: [ACCOUNT_ROLES.ADMIN] },
+  { path: '/student-lookup', icon: HiOutlineSearch, label: 'Student Lookup', roles: [ACCOUNT_ROLES.ADMIN] },
+  { path: '/schedule', icon: HiOutlineCalendar, label: 'Class Schedule', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN] },
+  { path: '/marksheets', icon: HiOutlineDocumentText, label: 'Marksheets', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.ADMIN] },
   { path: '/assignments', icon: HiOutlineBookOpen, label: 'Assignments', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },
-  { path: '/exams', icon: HiOutlineAcademicCap, label: 'Exams List', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },
-  { path: '/certificates', icon: HiOutlineBadgeCheck, label: 'Certificates', roles: [ACCOUNT_ROLES.TEACHER] },
-  { path: '/reports', icon: HiOutlineChartBar, label: 'Reports', roles: [ACCOUNT_ROLES.TEACHER] },
-  { path: '/messages', icon: HiOutlineMail, label: 'SMS/Mail', roles: [ACCOUNT_ROLES.TEACHER] },
-  { path: '/calendar', icon: HiOutlineClock, label: 'Calendar', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },
-  { path: '/todos', icon: HiOutlineClipboardList, label: 'To Do List', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },
-  { path: '/profile', icon: HiOutlineUser, label: 'My Profile', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },
+  { path: '/exams', icon: HiOutlineAcademicCap, label: 'Exam Schedule', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN] },
+  { path: '/reports', icon: HiOutlineChartBar, label: 'Reports', roles: [ACCOUNT_ROLES.ADMIN] },
+  { path: '/messages', icon: HiOutlineMail, label: 'SMS/Mail', roles: [ACCOUNT_ROLES.ADMIN] },
+  { path: '/calendar', icon: HiOutlineClock, label: 'Calendar', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN] },
+  { path: '/profile', icon: HiOutlineUser, label: 'My Profile', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN] },
 ];
 
 function MenuToggleIcon() {

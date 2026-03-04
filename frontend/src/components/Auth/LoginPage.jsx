@@ -3,14 +3,13 @@ import React, { useEffect, useState } from 'react';
 import { HiEye, HiEyeOff } from 'react-icons/hi';
 import { useNavigate } from 'react-router-dom';
 
-import { ACCOUNT_ROLES, ROLE_LABELS, getRoleHomePath } from '../../constants/roles';
+import { getRoleHomePath } from '../../constants/roles';
 import { useAuth } from '../../context/AuthContext';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [role, setRole] = useState(ACCOUNT_ROLES.TEACHER);
   const [error, setError] = useState('');
   const { login, loading, isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
@@ -25,9 +24,9 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     
-    const result = await login(email, password, role);
+    const result = await login(email, password);
     if (result.success) {
-      navigate(getRoleHomePath(role));
+      navigate(getRoleHomePath(result.role));
     } else {
       setError(result.error);
     }
@@ -82,28 +81,8 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              <div className="mb-6">
-                <label htmlFor="role" className="block text-gray-700 mb-2">Account Type</label>
-                <select
-                  id="role"
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  className="w-full px-3 py-2 border border-blue-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value={ACCOUNT_ROLES.STUDENT}>{ROLE_LABELS[ACCOUNT_ROLES.STUDENT]}</option>
-                  <option value={ACCOUNT_ROLES.TEACHER}>{ROLE_LABELS[ACCOUNT_ROLES.TEACHER]}</option>
-                </select>
-                {role === ACCOUNT_ROLES.TEACHER && (
-                  <div className="mt-2 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg p-2">
-                    Teacher login is for Admin Center members only.
-                  </div>
-                )}
-                {role === ACCOUNT_ROLES.STUDENT && (
-                  <div className="mt-2 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg p-2">
-                    Student login uses your student email. Password format: `lastname + DDMMYYYY` (example: `davin17022006`).
-                  </div>
-                )}
+              <div className="mb-6 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg p-2">
+                Account type is detected automatically from your email. Student email opens student account directly.
               </div>
 
               <button

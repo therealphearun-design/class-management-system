@@ -1,9 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
-import { addDays, format } from 'date-fns';
 import {
   HiOutlineCheck,
   HiOutlinePlus,
+  HiOutlineSearch,
   HiOutlineTrash,
 } from 'react-icons/hi';
 
@@ -11,129 +11,65 @@ import { ACCOUNT_ROLES, normalizeRole } from '../../constants/roles';
 import { useAuth } from '../../context/AuthContext';
 import Button from '../common/Button';
 
-const STORAGE_KEY = 'cms_todos_v2';
+const STORAGE_KEY = 'cms_todos_v3';
 
-const toIsoDate = (offsetDays) => format(addDays(new Date(), offsetDays), 'yyyy-MM-dd');
+const CATEGORY_OPTIONS = [
+  'General',
+  'Attendance',
+  'Assignments',
+  'Academics',
+  'Exams',
+  'Schedule',
+  'Certificates',
+  'Communication',
+  'Profile',
+];
 
-const buildTeacherDefaultTodos = () => ([
-  {
-    id: 1,
-    title: 'Finalize today attendance and submit class summary',
-    category: 'Attendance',
-    priority: 'High',
-    dueDate: toIsoDate(0),
-    completed: false,
-  },
-  {
-    id: 2,
-    title: 'Publish assignment instructions for next class',
-    category: 'Assignments',
-    priority: 'High',
-    dueDate: toIsoDate(1),
-    completed: false,
-  },
-  {
-    id: 3,
-    title: 'Review low-performing students from marksheet report',
-    category: 'Academics',
-    priority: 'Medium',
-    dueDate: toIsoDate(2),
-    completed: false,
-  },
-  {
-    id: 4,
-    title: 'Issue pending student certificates',
-    category: 'Certificates',
-    priority: 'Medium',
-    dueDate: toIsoDate(3),
-    completed: false,
-  },
-  {
-    id: 5,
-    title: 'Send weekly progress update to parents',
-    category: 'Communication',
-    priority: 'Low',
-    dueDate: toIsoDate(5),
-    completed: false,
-  },
-]);
+const STATUS_FILTERS = ['All', 'Pending', 'Completed'];
 
-const buildStudentDefaultTodos = (studentClass = 'your class') => ([
-  {
-    id: 1,
-    title: `Check timetable updates for ${studentClass}`,
-    category: 'Schedule',
-    priority: 'Medium',
-    dueDate: toIsoDate(0),
-    completed: false,
-  },
-  {
-    id: 2,
-    title: 'Submit today assignment before deadline',
-    category: 'Assignments',
-    priority: 'High',
-    dueDate: toIsoDate(1),
-    completed: false,
-  },
-  {
-    id: 3,
-    title: 'Review marksheet and improve weakest subject',
-    category: 'Academics',
-    priority: 'High',
-    dueDate: toIsoDate(2),
-    completed: false,
-  },
-  {
-    id: 4,
-    title: 'Prepare notes for upcoming exam topics',
-    category: 'Exams',
-    priority: 'Medium',
-    dueDate: toIsoDate(3),
-    completed: false,
-  },
-  {
-    id: 5,
-    title: 'Update your profile and contact details',
-    category: 'Profile',
-    priority: 'Low',
-    dueDate: toIsoDate(7),
-    completed: false,
-  },
-]);
+function getUserStorageKey(role, user) {
+  const identityRaw = String(user?.id || user?.email || user?.name || 'anonymous')
+    .trim()
+    .toLowerCase();
+  const identitySafe = identityRaw.replace(/[^a-z0-9@._-]/g, '_');
+  return `${STORAGE_KEY}:${role || 'unknown'}:${identitySafe}`;
+}
 
-function getInitialTodos(role, user) {
-  const storageKey = `${STORAGE_KEY}_${role}`;
-  const saved = localStorage.getItem(storageKey);
-  if (!saved) {
-    return role === ACCOUNT_ROLES.STUDENT
-      ? buildStudentDefaultTodos(user?.class)
-      : buildTeacherDefaultTodos();
-  }
+function normalizeTodo(item) {
+  return {
+    id: item?.id ?? Date.now(),
+    title: String(item?.title || '').trim(),
+    category: String(item?.category || 'General').trim() || 'General',
+    priority: ['High', 'Medium', 'Low'].includes(item?.priority) ? item.priority : 'Medium',
+    dueDate: item?.dueDate ? String(item.dueDate) : null,
+    completed: Boolean(item?.completed),
+  };
+}
+
+function loadTodos(storageKey) {
   try {
-    const parsed = JSON.parse(saved);
-    if (Array.isArray(parsed)) {
-      return parsed.map((item) => ({
-        ...item,
-        category: item.category || 'General',
-      }));
-    }
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map(normalizeTodo).filter((item) => item.title.length > 0);
   } catch {
-    // Ignore parse errors and fallback below.
+    return [];
   }
-  return role === ACCOUNT_ROLES.STUDENT
-    ? buildStudentDefaultTodos(user?.class)
-    : buildTeacherDefaultTodos();
 }
 
 export default function TodosPage() {
   const { user } = useAuth();
   const role = normalizeRole(user?.role);
   const isStudent = role === ACCOUNT_ROLES.STUDENT;
-  const [todos, setTodos] = useState(() => getInitialTodos(role, user));
+  const storageKey = getUserStorageKey(role, user);
+  const [todos, setTodos] = useState([]);
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('General');
   const [priority, setPriority] = useState('Medium');
   const [dueDate, setDueDate] = useState('');
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All');
 
   const stats = useMemo(() => {
     const total = todos.length;
@@ -142,9 +78,13 @@ export default function TodosPage() {
     return { total, completed, pending };
   }, [todos]);
 
+  useEffect(() => {
+    setTodos(loadTodos(storageKey));
+  }, [storageKey]);
+
   const persist = (nextTodos) => {
     setTodos(nextTodos);
-    localStorage.setItem(`${STORAGE_KEY}_${role}`, JSON.stringify(nextTodos));
+    localStorage.setItem(storageKey, JSON.stringify(nextTodos));
   };
 
   const addTodo = (e) => {
@@ -186,9 +126,23 @@ export default function TodosPage() {
     persist(nextTodos);
   };
 
+  const filteredTodos = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return todos.filter((item) => {
+      const matchSearch =
+        q.length === 0 ||
+        item.title.toLowerCase().includes(q) ||
+        String(item.category || '').toLowerCase().includes(q);
+      const matchStatus =
+        statusFilter === 'All' ||
+        (statusFilter === 'Completed' ? item.completed : !item.completed);
+      return matchSearch && matchStatus;
+    });
+  }, [search, statusFilter, todos]);
+
   const sortedTodos = useMemo(() => {
     const priorityScore = { High: 0, Medium: 1, Low: 2 };
-    return [...todos].sort((left, right) => {
+    return [...filteredTodos].sort((left, right) => {
       if (left.completed !== right.completed) return left.completed ? 1 : -1;
       const leftDue = left.dueDate || '9999-12-31';
       const rightDue = right.dueDate || '9999-12-31';
@@ -197,7 +151,7 @@ export default function TodosPage() {
       const rightPriority = priorityScore[right.priority] ?? 3;
       return leftPriority - rightPriority;
     });
-  }, [todos]);
+  }, [filteredTodos]);
 
   return (
     <div className="space-y-6">
@@ -240,15 +194,9 @@ export default function TodosPage() {
             onChange={(e) => setCategory(e.target.value)}
             className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
-            <option>General</option>
-            <option>Attendance</option>
-            <option>Assignments</option>
-            <option>Academics</option>
-            <option>Exams</option>
-            <option>Schedule</option>
-            <option>Certificates</option>
-            <option>Communication</option>
-            <option>Profile</option>
+            {CATEGORY_OPTIONS.map((option) => (
+              <option key={option}>{option}</option>
+            ))}
           </select>
           <select
             value={priority}
@@ -274,14 +222,44 @@ export default function TodosPage() {
       <div className="bg-white rounded-xl shadow-card p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-gray-800">Task List</h2>
-          <Button variant="secondary" size="sm" onClick={clearCompleted}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={clearCompleted}
+            disabled={stats.completed === 0}
+          >
             Clear Completed
           </Button>
         </div>
 
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+          <div className="sm:col-span-2 relative">
+            <HiOutlineSearch className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search tasks by title or category"
+              className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
+            {STATUS_FILTERS.map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
+          </select>
+        </div>
+
         <div className="space-y-3">
-          {todos.length === 0 ? (
-            <p className="text-sm text-gray-500">No tasks yet.</p>
+          {sortedTodos.length === 0 ? (
+            <p className="text-sm text-gray-500">
+              {todos.length === 0
+                ? 'No tasks yet. Add your first task above.'
+                : 'No tasks match the current filters.'}
+            </p>
           ) : (
             sortedTodos.map((item) => (
               <div
@@ -305,7 +283,7 @@ export default function TodosPage() {
                     onClick={() => toggleTodo(item.id)}
                     icon={HiOutlineCheck}
                   >
-                    {item.completed ? 'Done' : 'Mark Done'}
+                    {item.completed ? 'Undo' : 'Mark Done'}
                   </Button>
                   <Button
                     variant="danger"

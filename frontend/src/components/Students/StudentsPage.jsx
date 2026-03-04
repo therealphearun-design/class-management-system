@@ -2,7 +2,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 
 import { HiOutlinePlus } from 'react-icons/hi';
 
-import { classOptions, sectionOptions, shiftOptions, studentsData } from '../../data/students';
+import {
+  classOptions,
+  DEFAULT_CLASS_CODE,
+  DEFAULT_SHIFT,
+  normalizeShift,
+  studentsData,
+} from '../../data/students';
 import { studentsAPI } from '../../services/api';
 import Badge from '../common/Badge';
 import Button from '../common/Button';
@@ -12,6 +18,7 @@ import Modal from '../common/Modal';
 const LOCAL_STUDENTS_KEY = 'students_local_v2';
 const STUDENT_ID_PREFIX = 'CMS';
 const STUDENT_ID_BASE = 100000;
+const FINAL_GRADE = 12;
 
 const generateAvatar = (name) => {
   const seed = String(name || '').replace(/\s/g, '');
@@ -60,19 +67,33 @@ function saveLocalStudents(students) {
   }
 }
 
+function parseClassCode(classCode) {
+  const value = String(classCode || '').trim().toUpperCase();
+  const match = value.match(/^(\d+)([A-Z]+)$/);
+  if (!match) return null;
+  return { grade: Number(match[1]), suffix: match[2] };
+}
+
+function toNextClassCode(classCode) {
+  const parsed = parseClassCode(classCode);
+  if (!parsed) return classCode;
+  return `${parsed.grade + 1}${parsed.suffix}`;
+}
+
 export default function StudentsPage() {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isPromoteOpen, setIsPromoteOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [selectedClass, setSelectedClass] = useState('9A');
+  const [isPromoting, setIsPromoting] = useState(false);
+  const [retainStudentIds, setRetainStudentIds] = useState([]);
+  const [selectedClass, setSelectedClass] = useState(DEFAULT_CLASS_CODE);
   const [formData, setFormData] = useState({
     name: '',
-    class: '10A',
-    section: 'A',
-    shift: 'Morning',
-    rollNo: '',
+    class: DEFAULT_CLASS_CODE,
+    shift: DEFAULT_SHIFT,
   });
 
   useEffect(() => {
@@ -85,16 +106,16 @@ export default function StudentsPage() {
         const base = apiStudents.length > 0 ? apiStudents : studentsData;
         const merged = [...localStudents, ...base.filter((s) => !localStudents.some((l) => l.id === s.id))];
         const normalized = normalizeStudentIds(
-          merged.map((student) => ({ ...student, shift: student.shift || 'Morning' }))
+          merged.map((student) => ({ ...student, shift: normalizeShift(student.shift) }))
         );
-        saveLocalStudents(normalized.filter((s) => String(s.id).startsWith('local-')));
+        saveLocalStudents(normalized);
         setStudents(normalized);
       } catch (_error) {
         const merged = [...localStudents, ...studentsData.filter((s) => !localStudents.some((l) => l.id === s.id))];
         const normalized = normalizeStudentIds(
-          merged.map((student) => ({ ...student, shift: student.shift || 'Morning' }))
+          merged.map((student) => ({ ...student, shift: normalizeShift(student.shift) }))
         );
-        saveLocalStudents(normalized.filter((s) => String(s.id).startsWith('local-')));
+        saveLocalStudents(normalized);
         setStudents(normalized);
       } finally {
         setLoading(false);
@@ -105,21 +126,80 @@ export default function StudentsPage() {
   }, []);
 
   const stats = useMemo(() => {
-    const classSet = new Set(students.map((s) => s.class));
-    const sectionSet = new Set(students.map((s) => s.section));
-    const shiftSet = new Set(students.map((s) => s.shift || 'Morning'));
+    const activeStudents = students.filter((student) => student.status !== 'alumni');
+    const classSet = new Set(activeStudents.map((s) => s.class));
+    const shiftSet = new Set(activeStudents.map((s) => s.shift || DEFAULT_SHIFT));
+    const alumni = students.length - activeStudents.length;
     return {
-      total: students.length,
+      total: activeStudents.length,
       classes: classSet.size,
-      sections: sectionSet.size,
       shifts: shiftSet.size,
+      alumni,
     };
   }, [students]);
 
+  const classFilterOptions = useMemo(() => {
+    const values = classOptions.filter((opt) => opt.value).map((opt) => opt.value);
+    return [...values, 'ALUMNI'];
+  }, []);
+
   const filteredStudents = useMemo(() => {
-    if (!selectedClass || selectedClass === 'ALL') return students;
-    return students.filter((student) => student.class === selectedClass);
+    if (!selectedClass || selectedClass === 'ALL') {
+      return students.filter((student) => student.status !== 'alumni');
+    }
+    if (selectedClass === 'ALUMNI') {
+      return students.filter((student) => student.status === 'alumni');
+    }
+    return students.filter(
+      (student) => student.status !== 'alumni' && student.class === selectedClass
+    );
   }, [selectedClass, students]);
+
+  const promotionCandidates = useMemo(
+    () => students.filter((student) => student.status !== 'alumni'),
+    [students]
+  );
+
+  const promotionPreview = useMemo(() => {
+    return promotionCandidates.map((student) => {
+      const parsed = parseClassCode(student.class);
+      if (!parsed) {
+        return { ...student, action: 'retain', targetClass: student.class, reason: 'Invalid class code' };
+      }
+      if (parsed.grade >= FINAL_GRADE) {
+        return { ...student, action: 'graduate', targetClass: null, reason: 'Final grade completed' };
+      }
+      return {
+        ...student,
+        action: 'promote',
+        targetClass: toNextClassCode(student.class),
+        reason: 'Eligible for next grade',
+      };
+    });
+  }, [promotionCandidates]);
+
+  const promotionStats = useMemo(() => {
+    let promote = 0;
+    let graduate = 0;
+    let retain = 0;
+    promotionPreview.forEach((item) => {
+      if (retainStudentIds.includes(String(item.id))) {
+        retain += 1;
+        return;
+      }
+      if (item.action === 'graduate') graduate += 1;
+      else if (item.action === 'promote') promote += 1;
+      else retain += 1;
+    });
+    return { promote, graduate, retain };
+  }, [promotionPreview, retainStudentIds]);
+
+  const toggleRetain = (studentId) => {
+    const id = String(studentId);
+    setRetainStudentIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
 
   const columns = [
     {
@@ -146,29 +226,17 @@ export default function StudentsPage() {
       sortable: true,
     },
     {
-      header: 'Section',
-      accessor: 'section',
-      sortable: true,
-      render: (value) => <Badge variant="info">Section {value}</Badge>,
-    },
-    {
-      header: 'Roll No',
-      accessor: 'rollNo',
-      sortable: true,
-    },
-    {
       header: 'Shift',
       accessor: 'shift',
       sortable: true,
-      render: (value) => <Badge variant="success">{value || 'Morning'}</Badge>,
+      render: (value) => <Badge variant="success">{value || DEFAULT_SHIFT}</Badge>,
     },
   ];
 
   const handleCreateStudent = async (e) => {
     e.preventDefault();
     const name = formData.name.trim();
-    const rollNo = Number(formData.rollNo);
-    if (!name || !rollNo) return;
+    if (!name) return;
 
     const currentNumbers = students
       .map((s) => parseStudentIdNumber(s.studentId))
@@ -179,9 +247,7 @@ export default function StudentsPage() {
     const payload = {
       name,
       class: formData.class,
-      section: formData.section,
       shift: formData.shift,
-      rollNo,
       avatar: generateAvatar(name),
       studentId,
     };
@@ -193,13 +259,13 @@ export default function StudentsPage() {
         ? { ...payload, ...response.data, studentId: response.data.studentId || studentId }
         : { ...payload, id: `local-${Date.now()}` };
       setStudents((prev) => [created, ...prev]);
-      const localStudents = [created, ...readLocalStudents().filter((s) => s.id !== created.id)];
+      const localStudents = [created, ...readLocalStudents().filter((s) => String(s.id) !== String(created.id))];
       saveLocalStudents(localStudents);
       setNotification({ type: 'success', message: 'Student added successfully.' });
     } catch (_error) {
       const created = { ...payload, id: `local-${Date.now()}` };
       setStudents((prev) => [created, ...prev]);
-      const localStudents = [created, ...readLocalStudents().filter((s) => s.id !== created.id)];
+      const localStudents = [created, ...readLocalStudents().filter((s) => String(s.id) !== String(created.id))];
       saveLocalStudents(localStudents);
       setNotification({ type: 'success', message: 'Student added locally (API unavailable).' });
     } finally {
@@ -207,13 +273,61 @@ export default function StudentsPage() {
       setIsCreateOpen(false);
       setFormData({
         name: '',
-        class: '10A',
-        section: 'A',
-        shift: 'Morning',
-        rollNo: '',
+        class: DEFAULT_CLASS_CODE,
+        shift: DEFAULT_SHIFT,
       });
       setTimeout(() => setNotification(null), 3000);
     }
+  };
+
+  const applyYearEndPromotion = async () => {
+    setIsPromoting(true);
+    const retainSet = new Set(retainStudentIds.map(String));
+    let promoted = 0;
+    let graduated = 0;
+    let retained = 0;
+
+    const nextStudents = students.map((student) => {
+      if (student.status === 'alumni') return student;
+      const idKey = String(student.id);
+      if (retainSet.has(idKey)) {
+        retained += 1;
+        return student;
+      }
+
+      const parsed = parseClassCode(student.class);
+      if (!parsed) {
+        retained += 1;
+        return student;
+      }
+
+      if (parsed.grade >= FINAL_GRADE) {
+        graduated += 1;
+        return {
+          ...student,
+          status: 'alumni',
+          graduatedAt: new Date().toISOString(),
+        };
+      }
+
+      promoted += 1;
+      return {
+        ...student,
+        class: toNextClassCode(student.class),
+      };
+    });
+
+    setStudents(nextStudents);
+    saveLocalStudents(nextStudents);
+    setIsPromoting(false);
+    setIsPromoteOpen(false);
+    setRetainStudentIds([]);
+    setSelectedClass('ALL');
+    setNotification({
+      type: 'success',
+      message: `Promotion complete: ${promoted} promoted, ${graduated} graduated, ${retained} retained.`,
+    });
+    setTimeout(() => setNotification(null), 5000);
   };
 
   return (
@@ -235,27 +349,32 @@ export default function StudentsPage() {
           <h1 className="text-2xl font-bold text-gray-800">Students</h1>
           <p className="text-sm text-gray-500 mt-1">View all current students and add new records.</p>
         </div>
-        <Button icon={HiOutlinePlus} onClick={() => setIsCreateOpen(true)}>
-          New Student
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" onClick={() => setIsPromoteOpen(true)}>
+            Year-End Promotion
+          </Button>
+          <Button icon={HiOutlinePlus} onClick={() => setIsCreateOpen(true)}>
+            New Student
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
         <div className="bg-white rounded-xl p-4 shadow-card text-center">
           <p className="text-2xl font-bold text-gray-800">{stats.total}</p>
-          <p className="text-xs text-gray-500 mt-1">Total Students</p>
+          <p className="text-xs text-gray-500 mt-1">Active Students</p>
         </div>
         <div className="bg-white rounded-xl p-4 shadow-card text-center">
           <p className="text-2xl font-bold text-primary-600">{stats.classes}</p>
           <p className="text-xs text-gray-500 mt-1">Classes</p>
         </div>
         <div className="bg-white rounded-xl p-4 shadow-card text-center">
-          <p className="text-2xl font-bold text-blue-600">{stats.sections}</p>
-          <p className="text-xs text-gray-500 mt-1">Sections</p>
-        </div>
-        <div className="bg-white rounded-xl p-4 shadow-card text-center">
           <p className="text-2xl font-bold text-green-600">{stats.shifts}</p>
           <p className="text-xs text-gray-500 mt-1">Shifts</p>
+        </div>
+        <div className="bg-white rounded-xl p-4 shadow-card text-center">
+          <p className="text-2xl font-bold text-amber-600">{stats.alumni}</p>
+          <p className="text-xs text-gray-500 mt-1">Alumni</p>
         </div>
       </div>
 
@@ -264,7 +383,11 @@ export default function StudentsPage() {
           <p className="text-sm font-medium text-gray-700">Class View</p>
           <p className="text-xs text-gray-500 mt-0.5">
             Showing {filteredStudents.length} students
-            {selectedClass !== 'ALL' ? ` in class ${selectedClass}` : ' in all classes'}.
+            {selectedClass === 'ALL'
+              ? ' in all active classes.'
+              : selectedClass === 'ALUMNI'
+                ? ' in alumni list.'
+                : ` in class ${selectedClass}.`}
           </p>
         </div>
         <div className="w-full sm:w-52">
@@ -278,9 +401,9 @@ export default function StudentsPage() {
             className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
             <option value="ALL">All Classes</option>
-            {classOptions.filter((opt) => opt.value).map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.value}
+            {classFilterOptions.map((value) => (
+              <option key={value} value={value}>
+                {value}
               </option>
             ))}
           </select>
@@ -316,7 +439,7 @@ export default function StudentsPage() {
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3">
             <div>
               <label htmlFor="student-class" className="block text-sm font-medium text-gray-700 mb-1">
                 Class
@@ -332,51 +455,6 @@ export default function StudentsPage() {
                 ))}
               </select>
             </div>
-            <div>
-              <label htmlFor="student-section" className="block text-sm font-medium text-gray-700 mb-1">
-                Section
-              </label>
-              <select
-                id="student-section"
-                value={formData.section}
-                onChange={(e) => setFormData((prev) => ({ ...prev, section: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-              >
-                {sectionOptions.filter((opt) => opt.value).map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.value}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="student-shift" className="block text-sm font-medium text-gray-700 mb-1">
-                Shift
-              </label>
-              <select
-                id="student-shift"
-                value={formData.shift}
-                onChange={(e) => setFormData((prev) => ({ ...prev, shift: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-              >
-                {shiftOptions.filter((opt) => opt.value).map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.value}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="student-roll" className="block text-sm font-medium text-gray-700 mb-1">
-              Roll Number
-            </label>
-            <input
-              id="student-roll"
-              type="number"
-              min="1"
-              value={formData.rollNo}
-              onChange={(e) => setFormData((prev) => ({ ...prev, rollNo: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-              required
-            />
           </div>
 
           <div className="flex justify-end gap-2">
@@ -393,6 +471,92 @@ export default function StudentsPage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        isOpen={isPromoteOpen}
+        onClose={() => {
+          if (isPromoting) return;
+          setIsPromoteOpen(false);
+          setRetainStudentIds([]);
+        }}
+        title="Year-End Promotion"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Auto-promote all active students to the next class. Grade 12 students will be graduated to alumni.
+            Check students you want to retain in current class.
+          </p>
+
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-lg bg-green-50 border border-green-200 p-2">
+              <p className="text-lg font-bold text-green-700">{promotionStats.promote}</p>
+              <p className="text-xs text-green-700">Promote</p>
+            </div>
+            <div className="rounded-lg bg-amber-50 border border-amber-200 p-2">
+              <p className="text-lg font-bold text-amber-700">{promotionStats.graduate}</p>
+              <p className="text-xs text-amber-700">Graduate</p>
+            </div>
+            <div className="rounded-lg bg-slate-50 border border-slate-200 p-2">
+              <p className="text-lg font-bold text-slate-700">{promotionStats.retain}</p>
+              <p className="text-xs text-slate-700">Retain</p>
+            </div>
+          </div>
+
+          <div className="max-h-72 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+            {promotionPreview.length === 0 ? (
+              <p className="text-sm text-gray-500 p-3">No active students found.</p>
+            ) : (
+              promotionPreview.map((student) => {
+                const retainChecked = retainStudentIds.includes(String(student.id));
+                const actionLabel = retainChecked
+                  ? 'Retain'
+                  : student.action === 'graduate'
+                    ? 'Graduate'
+                    : student.action === 'promote'
+                      ? `Promote to ${student.targetClass}`
+                      : 'Retain';
+                return (
+                  <div key={student.id} className="flex items-center justify-between gap-3 p-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-800 truncate">{student.name}</p>
+                      <p className="text-xs text-gray-500">
+                        {student.class} | {student.shift || 'Morning'} | {student.reason}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-600">{actionLabel}</span>
+                      <input
+                        type="checkbox"
+                        checked={retainChecked}
+                        onChange={() => toggleRetain(student.id)}
+                        aria-label={`Retain ${student.name} in current class`}
+                        className="h-4 w-4 rounded border-gray-300"
+                      />
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setIsPromoteOpen(false);
+                setRetainStudentIds([]);
+              }}
+              disabled={isPromoting}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={applyYearEndPromotion} loading={isPromoting}>
+              Confirm Promotion
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );
