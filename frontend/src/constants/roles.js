@@ -31,6 +31,12 @@ export const ROLE_CAPABILITIES = {
   ],
 };
 
+const SCHOOL_TEAMS = [
+  'Technical Team (Admin Center)',
+  'School Manager',
+  'Teacher',
+];
+
 const roleAliases = {
   admin: ACCOUNT_ROLES.ADMIN,
   administrator: ACCOUNT_ROLES.ADMIN,
@@ -50,4 +56,8 @@ export function getRoleLabel(role) {
 
 export function getRoleHomePath(_role) {
   return '/dashboard';
+}
+
+export function getSchoolTeamLabels() {
+  return [...SCHOOL_TEAMS];
 }
