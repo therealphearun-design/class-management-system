@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
-import { HiOutlinePlus } from 'react-icons/hi';
+import { HiOutlinePencil, HiOutlinePlus, HiOutlineTrash } from 'react-icons/hi';
 
 import {
   classOptions,
@@ -16,7 +16,14 @@ import DataTable from '../common/DataTable';
 import Modal from '../common/Modal';
 
 const LOCAL_STUDENTS_KEY = 'students_local_v2';
-const FINAL_GRADE = 12;
+const EMPTY_FORM = {
+  studentId: '',
+  name: '',
+  class: DEFAULT_CLASS_CODE,
+  shift: DEFAULT_SHIFT,
+  gender: 'male',
+  dateOfBirth: '',
+};
 
 function readLocalStudents() {
   try {
@@ -36,17 +43,51 @@ function saveLocalStudents(students) {
   }
 }
 
-function parseClassCode(classCode) {
-  const value = String(classCode || '').trim().toUpperCase();
-  const match = value.match(/^(\d+)([A-Z]+)$/);
-  if (!match) return null;
-  return { grade: Number(match[1]), suffix: match[2] };
+function normalizeStudentRecord(student, fallbackId = null) {
+  const id = student?.id ?? fallbackId ?? `local-${Date.now()}`;
+  const name = String(student?.name ?? student?.full_name ?? '').trim();
+  const classCode = String(student?.class ?? student?.class_name ?? '').trim().toUpperCase();
+  const gender = normalizeGender(student?.gender, 'male');
+  const email = String(student?.email || '').trim();
+  const studentId = String(student?.studentId ?? student?.student_code ?? '').trim();
+
+  return {
+    ...student,
+    id,
+    studentId,
+    name,
+    class: classCode,
+    shift: normalizeShift(student?.shift),
+    gender,
+    email,
+    dateOfBirth: String(student?.dateOfBirth ?? student?.dob ?? '').trim(),
+    avatar:
+      student?.avatar ||
+      generateAvatarByGender(email || studentId || name || `student-${id}`, gender),
+    isLocalOnly: Boolean(student?.isLocalOnly) || String(id).startsWith('local-'),
+    status: student?.status || 'active',
+  };
 }
 
-function toNextClassCode(classCode) {
-  const parsed = parseClassCode(classCode);
-  if (!parsed) return classCode;
-  return `${parsed.grade + 1}${parsed.suffix}`;
+function mergeUniqueStudents(items) {
+  const map = new Map();
+  items.forEach((item, index) => {
+    const normalized = normalizeStudentRecord(item, index + 1);
+    const key =
+      (normalized.id != null && `id:${String(normalized.id)}`) ||
+      (normalized.studentId && `studentId:${normalized.studentId}`) ||
+      (normalized.email && `email:${normalized.email.toLowerCase()}`) ||
+      `fallback:${normalized.name.toLowerCase()}-${normalized.class}-${index}`;
+    map.set(key, normalized);
+  });
+  return Array.from(map.values());
+}
+
+function formatDateOfBirth(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return new Intl.DateTimeFormat('en-GB').format(date);
 }
 
 export default function StudentsPage() {
@@ -54,45 +95,36 @@ export default function StudentsPage() {
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [isPromoteOpen, setIsPromoteOpen] = useState(false);
+  const [editingStudent, setEditingStudent] = useState(null);
+  const [deletingStudent, setDeletingStudent] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [isPromoting, setIsPromoting] = useState(false);
-  const [retainStudentIds, setRetainStudentIds] = useState([]);
-  const [selectedClass, setSelectedClass] = useState(DEFAULT_CLASS_CODE);
-  const [formData, setFormData] = useState({
-    name: '',
-    class: DEFAULT_CLASS_CODE,
-    shift: DEFAULT_SHIFT,
-    gender: 'male',
-  });
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedClass, setSelectedClass] = useState('ALL');
+  const [formData, setFormData] = useState(EMPTY_FORM);
 
   useEffect(() => {
     const loadStudents = async () => {
       setLoading(true);
-      const localStudents = readLocalStudents();
+      const localStudents = readLocalStudents().map((student, index) =>
+        normalizeStudentRecord(student, index + 1)
+      );
+
       try {
         const response = await studentsAPI.getAll();
         const apiStudents = Array.isArray(response?.data) ? response.data : [];
-        const merged = [...localStudents, ...apiStudents.filter((s) => !localStudents.some((l) => l.id === s.id))];
-        const normalized = merged.map((student) => ({
-          ...student,
-          studentId: '',
-          gender: normalizeGender(student.gender, 'male'),
-          avatar: student.avatar || generateAvatarByGender(student.name || student.email, student.gender),
-          shift: normalizeShift(student.shift),
-        }));
-        saveLocalStudents(normalized);
-        setStudents(normalized);
+        const merged = mergeUniqueStudents([
+          ...apiStudents,
+          ...localStudents.filter((student) => student.isLocalOnly),
+        ]);
+        setStudents(merged);
+        saveLocalStudents(merged);
       } catch (_error) {
-        const normalized = localStudents.map((student) => ({
-          ...student,
-          studentId: '',
-          gender: normalizeGender(student.gender, 'male'),
-          avatar: student.avatar || generateAvatarByGender(student.name || student.email, student.gender),
-          shift: normalizeShift(student.shift),
-        }));
-        saveLocalStudents(normalized);
-        setStudents(normalized);
+        setStudents(localStudents);
+        saveLocalStudents(localStudents);
+        setNotification({
+          type: 'warning',
+          message: 'Student API is unavailable. Showing locally cached records only.',
+        });
       } finally {
         setLoading(false);
       }
@@ -101,81 +133,33 @@ export default function StudentsPage() {
     loadStudents();
   }, []);
 
+  useEffect(() => {
+    if (!notification) return undefined;
+    const timer = window.setTimeout(() => setNotification(null), 3500);
+    return () => window.clearTimeout(timer);
+  }, [notification]);
+
   const stats = useMemo(() => {
     const activeStudents = students.filter((student) => student.status !== 'alumni');
-    const classSet = new Set(activeStudents.map((s) => s.class));
-    const shiftSet = new Set(activeStudents.map((s) => s.shift || DEFAULT_SHIFT));
-    const alumni = students.length - activeStudents.length;
+    const classSet = new Set(activeStudents.map((student) => student.class).filter(Boolean));
+    const localOnly = activeStudents.filter((student) => student.isLocalOnly).length;
     return {
       total: activeStudents.length,
       classes: classSet.size,
-      shifts: shiftSet.size,
-      alumni,
+      shifts: new Set(activeStudents.map((student) => student.shift)).size,
+      localOnly,
     };
   }, [students]);
 
-  const classFilterOptions = useMemo(() => {
-    const values = classOptions.filter((opt) => opt.value).map((opt) => opt.value);
-    return [...values, 'ALUMNI'];
-  }, []);
-
-  const filteredStudents = useMemo(() => {
-    if (!selectedClass || selectedClass === 'ALL') {
-      return students.filter((student) => student.status !== 'alumni');
-    }
-    if (selectedClass === 'ALUMNI') {
-      return students.filter((student) => student.status === 'alumni');
-    }
-    return students.filter(
-      (student) => student.status !== 'alumni' && student.class === selectedClass
-    );
-  }, [selectedClass, students]);
-
-  const promotionCandidates = useMemo(
-    () => students.filter((student) => student.status !== 'alumni'),
-    [students]
+  const classFilterOptions = useMemo(
+    () => classOptions.filter((opt) => opt.value).map((opt) => opt.value),
+    []
   );
 
-  const promotionPreview = useMemo(() => {
-    return promotionCandidates.map((student) => {
-      const parsed = parseClassCode(student.class);
-      if (!parsed) {
-        return { ...student, action: 'retain', targetClass: student.class, reason: 'Invalid class code' };
-      }
-      if (parsed.grade >= FINAL_GRADE) {
-        return { ...student, action: 'graduate', targetClass: null, reason: 'Final grade completed' };
-      }
-      return {
-        ...student,
-        action: 'promote',
-        targetClass: toNextClassCode(student.class),
-        reason: 'Eligible for next grade',
-      };
-    });
-  }, [promotionCandidates]);
-
-  const promotionStats = useMemo(() => {
-    let promote = 0;
-    let graduate = 0;
-    let retain = 0;
-    promotionPreview.forEach((item) => {
-      if (retainStudentIds.includes(String(item.id))) {
-        retain += 1;
-        return;
-      }
-      if (item.action === 'graduate') graduate += 1;
-      else if (item.action === 'promote') promote += 1;
-      else retain += 1;
-    });
-    return { promote, graduate, retain };
-  }, [promotionPreview, retainStudentIds]);
-
-  const toggleRetain = (studentId) => {
-    const id = String(studentId);
-    setRetainStudentIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
-  };
+  const filteredStudents = useMemo(() => {
+    if (selectedClass === 'ALL') return students;
+    return students.filter((student) => student.class === selectedClass);
+  }, [selectedClass, students]);
 
   const columns = [
     {
@@ -185,13 +169,13 @@ export default function StudentsPage() {
       render: (value, row) => (
         <div className="flex items-center gap-3">
           <img
-            src={row.avatar || generateAvatarByGender(value, row.gender)}
+            src={row.avatar}
             alt={value}
-            className="w-9 h-9 rounded-full object-cover border border-gray-200"
+            className="h-9 w-9 rounded-full border border-gray-200 object-cover"
           />
           <div>
             <p className="font-medium text-gray-800">{value}</p>
-            <p className="text-xs text-gray-400">{row.class || '-'}</p>
+            <p className="text-xs text-gray-400">{row.studentId || 'Auto-generated ID'}</p>
           </div>
         </div>
       ),
@@ -202,114 +186,175 @@ export default function StudentsPage() {
       sortable: true,
     },
     {
-      header: 'Shift',
-      accessor: 'shift',
+      header: 'Gender',
+      accessor: 'gender',
       sortable: true,
-      render: (value) => <Badge variant="success">{value || DEFAULT_SHIFT}</Badge>,
+      render: (value) => <Badge variant={value === 'female' ? 'info' : 'success'}>{value}</Badge>,
+    },
+    {
+      header: 'Date of Birth',
+      accessor: 'dateOfBirth',
+      sortable: true,
+      render: (value) => formatDateOfBirth(value),
+    },
+    {
+      header: 'Source',
+      accessor: 'isLocalOnly',
+      sortable: true,
+      render: (value) => <Badge variant={value ? 'warning' : 'success'}>{value ? 'Local only' : 'Backend'}</Badge>,
+    },
+    {
+      header: 'Actions',
+      accessor: 'actions',
+      render: (_value, row) => (
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={HiOutlinePencil}
+            onClick={() => {
+              setEditingStudent(row);
+              setFormData({
+                studentId: row.studentId || '',
+                name: row.name || '',
+                class: row.class || DEFAULT_CLASS_CODE,
+                shift: row.shift || DEFAULT_SHIFT,
+                gender: row.gender || 'male',
+                dateOfBirth: row.dateOfBirth || '',
+              });
+              setIsCreateOpen(true);
+            }}
+          >
+            Edit
+          </Button>
+          <Button
+            variant="danger"
+            size="sm"
+            icon={HiOutlineTrash}
+            onClick={() => setDeletingStudent(row)}
+          >
+            Remove
+          </Button>
+        </div>
+      ),
     },
   ];
 
-  const handleCreateStudent = async (e) => {
-    e.preventDefault();
-    const name = formData.name.trim();
-    if (!name) return;
+  const resetForm = () => {
+    setFormData(EMPTY_FORM);
+    setEditingStudent(null);
+    setIsCreateOpen(false);
+  };
 
+  const upsertStudent = (student) => {
+    const normalized = normalizeStudentRecord(student);
+    setStudents((prev) => {
+      const exists = prev.some((item) => String(item.id) === String(normalized.id));
+      const next = exists
+        ? prev.map((item) => (String(item.id) === String(normalized.id) ? normalized : item))
+        : [normalized, ...prev];
+      saveLocalStudents(next);
+      return next;
+    });
+  };
+
+  const removeStudent = (studentId) => {
+    setStudents((prev) => {
+      const next = prev.filter((item) => String(item.id) !== String(studentId));
+      saveLocalStudents(next);
+      return next;
+    });
+  };
+
+  const handleCreateOrUpdateStudent = async (event) => {
+    event.preventDefault();
     const payload = {
-      name,
+      studentId: formData.studentId.trim(),
+      name: formData.name.trim(),
       class: formData.class,
       shift: formData.shift,
       gender: normalizeGender(formData.gender, 'male'),
-      avatar: generateAvatarByGender(name, formData.gender),
-      studentId: '',
+      dateOfBirth: formData.dateOfBirth || '',
     };
+
+    if (!payload.name) {
+      setNotification({ type: 'error', message: 'Student name is required.' });
+      return;
+    }
+
+    if (!payload.dateOfBirth) {
+      setNotification({
+        type: 'error',
+        message: 'Date of birth is required because the student password is generated from it.',
+      });
+      return;
+    }
 
     setIsSaving(true);
     try {
-      const response = await studentsAPI.create(payload);
-      const created = response?.data && typeof response.data === 'object'
-        ? { ...payload, ...response.data, studentId: '' }
-        : { ...payload, id: `local-${Date.now()}` };
-      setStudents((prev) => [created, ...prev]);
-      const localStudents = [created, ...readLocalStudents().filter((s) => String(s.id) !== String(created.id))];
-      saveLocalStudents(localStudents);
-      setNotification({ type: 'success', message: 'Student added successfully.' });
-    } catch (_error) {
-      const created = { ...payload, id: `local-${Date.now()}` };
-      setStudents((prev) => [created, ...prev]);
-      const localStudents = [created, ...readLocalStudents().filter((s) => String(s.id) !== String(created.id))];
-      saveLocalStudents(localStudents);
-      setNotification({ type: 'success', message: 'Student added locally.' });
+      const response = editingStudent
+        ? editingStudent.isLocalOnly
+          ? await studentsAPI.create(payload)
+          : await studentsAPI.update(editingStudent.id, payload)
+        : await studentsAPI.create(payload);
+
+      if (editingStudent?.isLocalOnly) {
+        removeStudent(editingStudent.id);
+        upsertStudent(response?.data && typeof response.data === 'object' ? response.data : payload);
+        setNotification({ type: 'success', message: 'Legacy student record synced to the backend successfully.' });
+      } else {
+        upsertStudent(response?.data && typeof response.data === 'object' ? response.data : payload);
+        setNotification({
+          type: 'success',
+          message: editingStudent ? 'Student updated successfully.' : 'Student added successfully.',
+        });
+      }
+      resetForm();
+    } catch (error) {
+      setNotification({
+        type: 'error',
+        message: error?.response?.data?.message || 'Could not save the student right now.',
+      });
     } finally {
       setIsSaving(false);
-      setIsCreateOpen(false);
-      setFormData({
-        name: '',
-        class: DEFAULT_CLASS_CODE,
-        shift: DEFAULT_SHIFT,
-        gender: 'male',
-      });
-      setTimeout(() => setNotification(null), 3000);
     }
   };
 
-  const applyYearEndPromotion = async () => {
-    setIsPromoting(true);
-    const retainSet = new Set(retainStudentIds.map(String));
-    let promoted = 0;
-    let graduated = 0;
-    let retained = 0;
-
-    const nextStudents = students.map((student) => {
-      if (student.status === 'alumni') return student;
-      const idKey = String(student.id);
-      if (retainSet.has(idKey)) {
-        retained += 1;
-        return student;
+  const handleDeleteStudent = async () => {
+    if (!deletingStudent) return;
+    setIsDeleting(true);
+    try {
+      if (!deletingStudent.isLocalOnly) {
+        await studentsAPI.delete(deletingStudent.id);
       }
-
-      const parsed = parseClassCode(student.class);
-      if (!parsed) {
-        retained += 1;
-        return student;
-      }
-
-      if (parsed.grade >= FINAL_GRADE) {
-        graduated += 1;
-        return {
-          ...student,
-          status: 'alumni',
-          graduatedAt: new Date().toISOString(),
-        };
-      }
-
-      promoted += 1;
-      return {
-        ...student,
-        class: toNextClassCode(student.class),
-      };
-    });
-
-    setStudents(nextStudents);
-    saveLocalStudents(nextStudents);
-    setIsPromoting(false);
-    setIsPromoteOpen(false);
-    setRetainStudentIds([]);
-    setSelectedClass('ALL');
-    setNotification({
-      type: 'success',
-      message: `Promotion complete: ${promoted} promoted, ${graduated} graduated, ${retained} retained.`,
-    });
-    setTimeout(() => setNotification(null), 5000);
+      removeStudent(deletingStudent.id);
+      setDeletingStudent(null);
+      setNotification({
+        type: 'success',
+        message: deletingStudent.isLocalOnly
+          ? 'Local student record removed.'
+          : 'Student removed successfully.',
+      });
+    } catch (error) {
+      setNotification({
+        type: 'error',
+        message: error?.response?.data?.message || 'Could not remove this student right now.',
+      });
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
     <div className="space-y-6">
       {notification && (
         <div
-          className={`rounded-lg px-4 py-3 text-sm ${
-            notification.type === 'success'
-              ? 'bg-green-50 text-green-700 border border-green-200'
-              : 'bg-red-50 text-red-700 border border-red-200'
+          className={`rounded-lg border px-4 py-3 text-sm ${
+            notification.type === 'error'
+              ? 'border-red-200 bg-red-50 text-red-700'
+              : notification.type === 'warning'
+                ? 'border-yellow-200 bg-yellow-50 text-yellow-700'
+                : 'border-green-200 bg-green-50 text-green-700'
           }`}
         >
           {notification.message}
@@ -319,47 +364,47 @@ export default function StudentsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Students</h1>
-          <p className="text-sm text-gray-500 mt-1">View all current students and add new records.</p>
+          <p className="mt-1 text-sm text-gray-500">
+            Manage student records with backend-backed create, update, and delete actions.
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" onClick={() => setIsPromoteOpen(true)}>
-            Year-End Promotion
-          </Button>
-          <Button icon={HiOutlinePlus} onClick={() => setIsCreateOpen(true)}>
-            New Student
-          </Button>
-        </div>
+        <Button
+          icon={HiOutlinePlus}
+          onClick={() => {
+            setEditingStudent(null);
+            setFormData(EMPTY_FORM);
+            setIsCreateOpen(true);
+          }}
+        >
+          New Student
+        </Button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-        <div className="bg-white rounded-xl p-4 shadow-card text-center">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+        <div className="rounded-xl bg-white p-4 text-center shadow-card">
           <p className="text-2xl font-bold text-gray-800">{stats.total}</p>
-          <p className="text-xs text-gray-500 mt-1">Active Students</p>
+          <p className="mt-1 text-xs text-gray-500">Student Records</p>
         </div>
-        <div className="bg-white rounded-xl p-4 shadow-card text-center">
+        <div className="rounded-xl bg-white p-4 text-center shadow-card">
           <p className="text-2xl font-bold text-primary-600">{stats.classes}</p>
-          <p className="text-xs text-gray-500 mt-1">Classes</p>
+          <p className="mt-1 text-xs text-gray-500">Classes</p>
         </div>
-        <div className="bg-white rounded-xl p-4 shadow-card text-center">
+        <div className="rounded-xl bg-white p-4 text-center shadow-card">
           <p className="text-2xl font-bold text-green-600">{stats.shifts}</p>
-          <p className="text-xs text-gray-500 mt-1">Shifts</p>
+          <p className="mt-1 text-xs text-gray-500">Shifts</p>
         </div>
-        <div className="bg-white rounded-xl p-4 shadow-card text-center">
-          <p className="text-2xl font-bold text-amber-600">{stats.alumni}</p>
-          <p className="text-xs text-gray-500 mt-1">Alumni</p>
+        <div className="rounded-xl bg-white p-4 text-center shadow-card">
+          <p className="text-2xl font-bold text-amber-600">{stats.localOnly}</p>
+          <p className="mt-1 text-xs text-gray-500">Local Legacy Records</p>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-card p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div className="flex flex-col gap-3 rounded-xl bg-white p-4 shadow-card sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm font-medium text-gray-700">Class View</p>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Showing {filteredStudents.length} students
-            {selectedClass === 'ALL'
-              ? ' in all active classes.'
-              : selectedClass === 'ALUMNI'
-                ? ' in alumni list.'
-                : ` in class ${selectedClass}.`}
+          <p className="mt-0.5 text-xs text-gray-500">
+            Showing {filteredStudents.length} student{filteredStudents.length === 1 ? '' : 's'}
+            {selectedClass === 'ALL' ? ' across all classes.' : ` in class ${selectedClass}.`}
           </p>
         </div>
         <div className="w-full sm:w-52">
@@ -370,7 +415,7 @@ export default function StudentsPage() {
             id="students-class-filter"
             value={selectedClass}
             onChange={(e) => setSelectedClass(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
             <option value="ALL">All Classes</option>
             {classFilterOptions.map((value) => (
@@ -388,17 +433,31 @@ export default function StudentsPage() {
         loading={loading}
         searchable={true}
         exportable={true}
-        itemsPerPage={30}
+        itemsPerPage={20}
       />
 
       <Modal
         isOpen={isCreateOpen}
-        onClose={() => !isSaving && setIsCreateOpen(false)}
-        title="Add New Student"
+        onClose={() => !isSaving && resetForm()}
+        title={editingStudent ? 'Edit Student' : 'Add New Student'}
       >
-        <form onSubmit={handleCreateStudent} className="space-y-4">
+        <form onSubmit={handleCreateOrUpdateStudent} className="space-y-4">
           <div>
-            <label htmlFor="student-name" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="student-id" className="mb-1 block text-sm font-medium text-gray-700">
+              Student ID
+            </label>
+            <input
+              id="student-id"
+              type="text"
+              value={formData.studentId}
+              onChange={(e) => setFormData((prev) => ({ ...prev, studentId: e.target.value }))}
+              placeholder="Optional. Leave empty to auto-generate."
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="student-name" className="mb-1 block text-sm font-medium text-gray-700">
               Full Name
             </label>
             <input
@@ -406,36 +465,39 @@ export default function StudentsPage() {
               type="text"
               value={formData.name}
               onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               required
             />
           </div>
 
-          <div className="grid grid-cols-1 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label htmlFor="student-class" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="student-class" className="mb-1 block text-sm font-medium text-gray-700">
                 Class
               </label>
               <select
                 id="student-class"
                 value={formData.class}
                 onChange={(e) => setFormData((prev) => ({ ...prev, class: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 {classOptions.filter((opt) => opt.value).map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.value}</option>
+                  <option key={opt.value} value={opt.value}>
+                    {opt.value}
+                  </option>
                 ))}
               </select>
             </div>
+
             <div>
-              <label htmlFor="student-gender" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="student-gender" className="mb-1 block text-sm font-medium text-gray-700">
                 Gender
               </label>
               <select
                 id="student-gender"
                 value={formData.gender}
                 onChange={(e) => setFormData((prev) => ({ ...prev, gender: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 <option value="male">Male</option>
                 <option value="female">Female</option>
@@ -443,103 +505,49 @@ export default function StudentsPage() {
             </div>
           </div>
 
+          <div>
+            <label htmlFor="student-date-of-birth" className="mb-1 block text-sm font-medium text-gray-700">
+              Date of Birth
+            </label>
+            <input
+              id="student-date-of-birth"
+              type="date"
+              value={formData.dateOfBirth}
+              onChange={(e) => setFormData((prev) => ({ ...prev, dateOfBirth: e.target.value }))}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              required
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Required for student login. The first password uses last name + date of birth.
+            </p>
+          </div>
+
           <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setIsCreateOpen(false)}
-              disabled={isSaving}
-            >
+            <Button type="button" variant="secondary" onClick={resetForm} disabled={isSaving}>
               Cancel
             </Button>
             <Button type="submit" loading={isSaving}>
-              Save Student
+              {editingStudent ? 'Save Changes' : 'Save Student'}
             </Button>
           </div>
         </form>
       </Modal>
 
       <Modal
-        isOpen={isPromoteOpen}
-        onClose={() => {
-          if (isPromoting) return;
-          setIsPromoteOpen(false);
-          setRetainStudentIds([]);
-        }}
-        title="Year-End Promotion"
+        isOpen={Boolean(deletingStudent)}
+        onClose={() => !isDeleting && setDeletingStudent(null)}
+        title="Remove Student"
       >
         <div className="space-y-4">
           <p className="text-sm text-gray-600">
-            Auto-promote all active students to the next class. Grade 12 students will be graduated to alumni.
-            Check students you want to retain in current class.
+            Remove <span className="font-semibold text-gray-800">{deletingStudent?.name || 'this student'}</span> from the student list?
           </p>
-
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-lg bg-green-50 border border-green-200 p-2">
-              <p className="text-lg font-bold text-green-700">{promotionStats.promote}</p>
-              <p className="text-xs text-green-700">Promote</p>
-            </div>
-            <div className="rounded-lg bg-amber-50 border border-amber-200 p-2">
-              <p className="text-lg font-bold text-amber-700">{promotionStats.graduate}</p>
-              <p className="text-xs text-amber-700">Graduate</p>
-            </div>
-            <div className="rounded-lg bg-slate-50 border border-slate-200 p-2">
-              <p className="text-lg font-bold text-slate-700">{promotionStats.retain}</p>
-              <p className="text-xs text-slate-700">Retain</p>
-            </div>
-          </div>
-
-          <div className="max-h-72 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
-            {promotionPreview.length === 0 ? (
-              <p className="text-sm text-gray-500 p-3">No active students found.</p>
-            ) : (
-              promotionPreview.map((student) => {
-                const retainChecked = retainStudentIds.includes(String(student.id));
-                const actionLabel = retainChecked
-                  ? 'Retain'
-                  : student.action === 'graduate'
-                    ? 'Graduate'
-                    : student.action === 'promote'
-                      ? `Promote to ${student.targetClass}`
-                      : 'Retain';
-                return (
-                  <div key={student.id} className="flex items-center justify-between gap-3 p-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{student.name}</p>
-                      <p className="text-xs text-gray-500">
-                        {student.class} | {student.shift || 'Morning'} | {student.reason}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-600">{actionLabel}</span>
-                      <input
-                        type="checkbox"
-                        checked={retainChecked}
-                        onChange={() => toggleRetain(student.id)}
-                        aria-label={`Retain ${student.name} in current class`}
-                        className="h-4 w-4 rounded border-gray-300"
-                      />
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-
           <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                setIsPromoteOpen(false);
-                setRetainStudentIds([]);
-              }}
-              disabled={isPromoting}
-            >
+            <Button variant="secondary" onClick={() => setDeletingStudent(null)} disabled={isDeleting}>
               Cancel
             </Button>
-            <Button type="button" onClick={applyYearEndPromotion} loading={isPromoting}>
-              Confirm Promotion
+            <Button variant="danger" loading={isDeleting} onClick={handleDeleteStudent}>
+              Remove
             </Button>
           </div>
         </div>

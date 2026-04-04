@@ -201,16 +201,16 @@ export default function DashboardPage() {
   const quickActions = isAdmin
     ? [
         { label: 'Manage Students', subtitle: 'Create and maintain school records', to: '/students' },
-        { label: 'Student Lookup', subtitle: 'Search and verify student information', to: '/student-lookup' },
+        { label: 'User Lookup', subtitle: 'Search students and staff information', to: '/student-lookup' },
         { label: 'Reports Center', subtitle: 'Review analytics and export reports', to: '/reports' },
-        { label: 'SMS / Mail', subtitle: 'Coordinate notices and announcements', to: '/messages' },
+        { label: 'Calendar', subtitle: 'Track school activities and deadlines', to: '/calendar' },
       ]
     : isTeacher
       ? [
           { label: 'Take Attendance', subtitle: 'Open the daily attendance workflow', to: '/attendance' },
           { label: 'Assignments', subtitle: 'Create and manage class assignments', to: '/assignments' },
           { label: 'Exam Schedule', subtitle: 'Review assessment planning', to: '/exams' },
-          { label: 'Calendar', subtitle: 'Track school activities and deadlines', to: '/calendar' },
+          { label: 'Profile', subtitle: 'Review personal account information', to: '/profile' },
         ]
       : [
           { label: 'Assignments', subtitle: 'Review tasks and due dates', to: '/assignments' },
@@ -233,7 +233,7 @@ export default function DashboardPage() {
         ]
       : [
           { title: 'Learning portal', value: 'Ready', note: 'Assignments, exams, and marksheets available' },
-          { title: 'Calendar support', value: 'Enabled', note: 'Track school activities and due dates' },
+          { title: 'Exam visibility', value: 'Enabled', note: 'Review upcoming assessments and published schedules' },
           { title: 'Profile access', value: 'Available', note: 'Keep your information up to date' },
         ];
 
@@ -246,7 +246,7 @@ export default function DashboardPage() {
       ]
     : [
         'Assignments, exams, and marksheet sections are available from your student workspace.',
-        'Calendar tools can be used to track school events and deadlines.',
+        'Exam schedules should be reviewed regularly for upcoming assessment dates.',
         'Profile details should stay updated for communication and account access.',
         'Review academic pages regularly for school announcements and learning progress.',
       ];

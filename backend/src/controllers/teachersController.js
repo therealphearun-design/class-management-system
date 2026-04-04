@@ -6,6 +6,29 @@ function cleanText(value, maxLen = 120) {
   return String(value || '').trim().slice(0, maxLen);
 }
 
+function normalizeTeacherStream(value) {
+  const raw = cleanText(value, 80);
+  const normalized = raw.toLowerCase();
+
+  if (['science', 'science department', 'ict department'].includes(normalized)) {
+    return 'Science';
+  }
+
+  if (
+    [
+      'social',
+      'social studies department',
+      'language department',
+      'physical education department',
+      'academic affairs',
+    ].includes(normalized)
+  ) {
+    return 'Social';
+  }
+
+  return raw || '';
+}
+
 async function getAllTeachers(_req, res) {
   try {
     const [rows] = await pool.query(
@@ -20,6 +43,7 @@ async function getAllTeachers(_req, res) {
           t.full_name AS fullName,
           t.gender AS profileGender,
           t.department,
+          t.department AS stream,
           t.subject_name AS subjectName,
           t.phone,
           t.is_active AS isActive
@@ -45,7 +69,7 @@ async function createTeacher(req, res) {
     const employeeCode = cleanText(req.body?.employeeCode, 50);
     const fullName = cleanText(req.body?.fullName, 120);
     const gender = String(req.body?.gender || '').trim().toLowerCase();
-    const department = cleanText(req.body?.department, 80);
+    const department = normalizeTeacherStream(req.body?.stream || req.body?.department);
     const subjectName = cleanText(req.body?.subjectName, 80);
     const phone = cleanText(req.body?.phone, 40) || null;
 
@@ -54,7 +78,7 @@ async function createTeacher(req, res) {
       !['male', 'female'].includes(gender)
     ) {
       return res.status(400).json({
-        message: 'email, password, employeeCode, fullName, gender, department, subjectName are required',
+        message: 'email, password, employeeCode, fullName, gender, stream, subjectName are required',
       });
     }
 
@@ -99,14 +123,14 @@ async function updateTeacher(req, res) {
 
     const fullName = cleanText(req.body?.fullName, 120);
     const gender = String(req.body?.gender || '').trim().toLowerCase();
-    const department = cleanText(req.body?.department, 80);
+    const department = normalizeTeacherStream(req.body?.stream || req.body?.department);
     const subjectName = cleanText(req.body?.subjectName, 80);
     const phone = cleanText(req.body?.phone, 40) || null;
     const isActive = req.body?.isActive === false ? 0 : 1;
     const newPassword = String(req.body?.password || '').trim();
 
     if (!fullName || !department || !subjectName || !['male', 'female'].includes(gender)) {
-      return res.status(400).json({ message: 'fullName, gender, department, subjectName are required' });
+      return res.status(400).json({ message: 'fullName, gender, stream, subjectName are required' });
     }
 
     await connection.beginTransaction();

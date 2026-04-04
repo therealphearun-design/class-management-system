@@ -4,7 +4,6 @@ import {
   HiOutlineBell,
   HiOutlineCog,
   HiOutlineLogout,
-  HiOutlineMail,
   HiOutlineMoon,
   HiOutlineSearch,
   HiOutlineSun,
@@ -25,23 +24,20 @@ const projectNavItems = [
   { label: 'Dashboard', to: '/dashboard', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN] },
   { label: 'Attendance', to: '/attendance', roles: [ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN] },
   { label: 'Students', to: '/students', roles: [ACCOUNT_ROLES.ADMIN] },
-  { label: 'Student Lookup', to: '/student-lookup', roles: [ACCOUNT_ROLES.ADMIN] },
+  { label: 'User Lookup', to: '/student-lookup', roles: [ACCOUNT_ROLES.ADMIN] },
   { label: 'Assignments', to: '/assignments', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },
   { label: 'Exam Schedule', to: '/exams', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN] },
   { label: 'Reports', to: '/reports', roles: [ACCOUNT_ROLES.ADMIN] },
-  { label: 'Calendar', to: '/calendar', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN] },
 ];
 
 const pageEntries = [
   { id: 'dashboard', title: 'Dashboard', subtitle: 'Overview', path: '/dashboard', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN] },
   { id: 'attendance', title: 'Attendance', subtitle: 'Daily attendance', path: '/attendance', roles: [ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN] },
   { id: 'students', title: 'Students', subtitle: 'Student records', path: '/students', roles: [ACCOUNT_ROLES.ADMIN] },
-  { id: 'student-lookup', title: 'Student Lookup', subtitle: 'Find by ID or email', path: '/student-lookup', roles: [ACCOUNT_ROLES.ADMIN] },
+  { id: 'student-lookup', title: 'User Lookup', subtitle: 'Find students or staff', path: '/student-lookup', roles: [ACCOUNT_ROLES.ADMIN] },
   { id: 'assignments', title: 'Assignments', subtitle: 'Homework and tasks', path: '/assignments', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },
   { id: 'exams', title: 'Exam Schedule', subtitle: 'Published exam timetable', path: '/exams', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN] },
   { id: 'reports', title: 'Reports', subtitle: 'Analytics and reports', path: '/reports', roles: [ACCOUNT_ROLES.ADMIN] },
-  { id: 'messages', title: 'SMS/Mail', subtitle: 'Messages and announcements', path: '/messages', roles: [ACCOUNT_ROLES.ADMIN] },
-  { id: 'developer-tools', title: 'Developer Tools', subtitle: 'Internal admin center utilities', path: '/developer-tools', roles: [ACCOUNT_ROLES.ADMIN], adminCenterOnly: true },
   { id: 'profile', title: 'My Profile', subtitle: 'Account settings', path: '/profile', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN] },
 ];
 
@@ -406,18 +402,6 @@ export default function Header({ onMenuToggle, isMenuEnabled, onMenuVisibilityTo
                 <HiOutlineMoon className="h-5 w-5 text-gray-500" />
               )}
             </button>
-
-            {role === ACCOUNT_ROLES.ADMIN && (
-              <button
-                type="button"
-                onClick={() => navigate('/messages')}
-                className="shell-action relative rounded-xl p-2"
-                aria-label="Open messages"
-              >
-                <HiOutlineMail className="h-5 w-5 text-gray-500" />
-                <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500" />
-              </button>
-            )}
 
             <button
               type="button"

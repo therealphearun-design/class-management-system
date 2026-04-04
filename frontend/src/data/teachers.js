@@ -3,22 +3,22 @@ import { generateAvatarByGender, normalizeGender } from '../utils/avatar';
 
 export const LOCAL_TEACHERS_KEY = 'teachers_local_v1';
 
-const departments = [
-  'Academic Affairs',
-  'Science Department',
-  'Social Studies Department',
-  'Language Department',
-  'ICT Department',
-  'Physical Education Department',
-];
+const streams = ['Science', 'Social'];
+
+const LEGACY_STREAM_MAP = {
+  'Academic Affairs': 'Social',
+  'Science Department': 'Science',
+  'Social Studies Department': 'Social',
+  'Language Department': 'Social',
+  'ICT Department': 'Science',
+  'Physical Education Department': 'Social',
+  Science: 'Science',
+  Social: 'Social',
+};
 
 export const DEPARTMENT_SUBJECTS = {
-  'Academic Affairs': ['Life Skills and Career Orientation', 'Digital Literacy / ICT'],
-  'Science Department': ['Mathematics', 'Physics', 'Chemistry', 'Biology', 'Earth & Environmental Science'],
-  'Social Studies Department': ['History', 'Geography', 'Social Studies', 'Civics and Morality'],
-  'Language Department': ['Khmer Language & Literature', 'English', 'French'],
-  'ICT Department': ['Digital Literacy / ICT', 'Life Skills and Career Orientation'],
-  'Physical Education Department': ['Physical Education & Sports'],
+  Science: ['Mathematics', 'Physics', 'Chemistry', 'Biology', 'Earth & Environmental Science', 'Digital Literacy / ICT'],
+  Social: ['History', 'Geography', 'Social Studies', 'Civics and Morality', 'Khmer Language & Literature', 'English', 'French', 'Life Skills and Career Orientation', 'Physical Education & Sports'],
 };
 const fallbackSubjects = subjectOptions
   .filter((item) => item.value)
@@ -36,14 +36,18 @@ function toSlug(value) {
 }
 
 export function getDepartmentSubjectOptions(department) {
-  const scoped = DEPARTMENT_SUBJECTS[department] || fallbackSubjects;
+  const scoped = DEPARTMENT_SUBJECTS[normalizeTeacherStream(department)] || fallbackSubjects;
   return scoped.map((subject) => ({ value: subject, label: subject }));
+}
+
+export function normalizeTeacherStream(value) {
+  return LEGACY_STREAM_MAP[String(value || '').trim()] || streams[0];
 }
 
 export function normalizeTeacherItem(item, index = 0) {
   const name = String(item?.name || '').trim() || `Staff ${index + 1}`;
-  const department = departments.includes(item?.class) ? item.class : departments[0];
-  const subjectPool = DEPARTMENT_SUBJECTS[department] || fallbackSubjects;
+  const stream = normalizeTeacherStream(item?.stream || item?.department || item?.class);
+  const subjectPool = DEPARTMENT_SUBJECTS[stream] || fallbackSubjects;
   const subject = subjectPool.includes(item?.subject) ? item.subject : subjectPool[0];
   const baseId = item?.id || `teacher-${toSlug(name) || index + 1}`;
   const employeeId = String(item?.employeeId || `T${String(index + 1).padStart(4, '0')}`);
@@ -53,7 +57,8 @@ export function normalizeTeacherItem(item, index = 0) {
     employeeId,
     name,
     gender,
-    class: department,
+    class: stream,
+    stream,
     subject,
     shift: 'Staff',
     avatar: item?.avatar || avatarFor(baseId, gender),
@@ -87,10 +92,10 @@ export function saveTeachers(items) {
 }
 
 export const teacherDepartmentOptions = [
-  { value: '', label: 'All Departments' },
-  ...departments.map((department) => ({
-    value: department,
-    label: department,
+  { value: '', label: 'All Streams' },
+  ...streams.map((stream) => ({
+    value: stream,
+    label: stream,
   })),
 ];
 

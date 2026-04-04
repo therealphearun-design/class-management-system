@@ -11,6 +11,38 @@ import {
 import Button from './Button';
 import { usePagination } from '../../hooks/usePagination';
 
+function buildPageItems(currentPage, totalPages) {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const pages = new Set([1, totalPages, currentPage, currentPage - 1, currentPage + 1]);
+  if (currentPage <= 3) {
+    pages.add(2);
+    pages.add(3);
+    pages.add(4);
+  }
+  if (currentPage >= totalPages - 2) {
+    pages.add(totalPages - 1);
+    pages.add(totalPages - 2);
+    pages.add(totalPages - 3);
+  }
+
+  const sortedPages = Array.from(pages)
+    .filter((page) => page >= 1 && page <= totalPages)
+    .sort((left, right) => left - right);
+
+  const items = [];
+  sortedPages.forEach((page, index) => {
+    if (index > 0 && page - sortedPages[index - 1] > 1) {
+      items.push(`ellipsis-${sortedPages[index - 1]}-${page}`);
+    }
+    items.push(page);
+  });
+
+  return items;
+}
+
 export default function DataTable({
   columns,
   data,
@@ -51,6 +83,10 @@ export default function DataTable({
 
   const { currentItems, currentPage, totalPages, nextPage, prevPage, paginate } =
     usePagination(sortedData, itemsPerPage);
+  const pageItems = useMemo(
+    () => buildPageItems(currentPage, totalPages),
+    [currentPage, totalPages]
+  );
 
   const requestSort = (key) => {
     setSortConfig({
@@ -173,45 +209,50 @@ export default function DataTable({
       </div>
 
       {pagination && totalPages > 1 && (
-        <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between">
+        <div className="flex flex-col gap-3 border-t border-gray-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm text-gray-500">
             Page {currentPage} of {totalPages}
+            <span className="ml-2 text-xs text-gray-400">
+              Showing {currentItems.length} of {sortedData.length} records
+            </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 self-end sm:self-auto">
             <button
               onClick={prevPage}
               disabled={currentPage === 1}
               className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              aria-label="Previous page"
             >
               <HiOutlineChevronLeft className="w-4 h-4 text-gray-600" />
             </button>
 
             <div className="flex items-center gap-1">
-              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                let pageNum;
-                if (totalPages <= 5) {
-                  pageNum = i + 1;
-                } else if (currentPage <= 3) {
-                  pageNum = i + 1;
-                } else if (currentPage >= totalPages - 2) {
-                  pageNum = totalPages - 4 + i;
-                } else {
-                  pageNum = currentPage - 2 + i;
+              {pageItems.map((item) => {
+                if (typeof item === 'string') {
+                  return (
+                    <span
+                      key={item}
+                      className="flex h-8 min-w-[1.75rem] items-center justify-center px-1 text-sm text-gray-400"
+                    >
+                      ...
+                    </span>
+                  );
                 }
 
                 return (
                   <button
-                    key={pageNum}
-                    onClick={() => paginate(pageNum)}
+                    key={item}
+                    onClick={() => paginate(item)}
                     className={`
-                      w-8 h-8 rounded-lg text-sm font-medium transition-colors
-                      ${currentPage === pageNum
+                      h-8 min-w-[2rem] rounded-lg px-2 text-sm font-medium transition-colors
+                      ${currentPage === item
                         ? 'bg-primary-600 text-white'
                         : 'hover:bg-gray-100 text-gray-600'
                       }
                     `}
+                    aria-current={currentPage === item ? 'page' : undefined}
                   >
-                    {pageNum}
+                    {item}
                   </button>
                 );
               })}
@@ -221,6 +262,7 @@ export default function DataTable({
               onClick={nextPage}
               disabled={currentPage === totalPages}
               className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              aria-label="Next page"
             >
               <HiOutlineChevronRight className="w-4 h-4 text-gray-600" />
             </button>

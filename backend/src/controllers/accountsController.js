@@ -61,7 +61,7 @@ async function getTeacherAccounts() {
       t.full_name AS fullName,
       u.email,
       u.role,
-      CONCAT('Teacher - ', t.department) AS sourceLabel,
+      CONCAT('Teacher - ', t.department, ' Stream') AS sourceLabel,
       1 AS hasAccount,
       u.must_change_password AS mustChangePassword
     FROM teachers t
@@ -170,7 +170,7 @@ async function resolveAccountTarget(connection, accountType, accountId) {
     if (rows.length === 0) return null;
     return {
       accountType: 'teacher',
-      sourceLabel: `Teacher - ${rows[0].department}`,
+      sourceLabel: `Teacher - ${rows[0].department} Stream`,
       hasAccount: true,
       ...rows[0],
     };

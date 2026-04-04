@@ -138,7 +138,7 @@ export default function FilterBar() {
           loading={isSubmitting}
           onClick={() => submitAttendance(filteredStudents.map((s) => s.id), filteredStudents)}
         >
-          {isSubmitting ? 'Submitting...' : (isAdmin ? 'Track Teacher Attendance' : 'Take Attendance')}
+          {isSubmitting ? 'Submitting...' : (isAdmin ? 'Track Teacher Attendance by Stream' : 'Take Attendance')}
         </Button>
       </div>
     </div>

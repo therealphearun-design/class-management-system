@@ -68,6 +68,38 @@ function clearStoredAuth() {
   localStorage.removeItem('auth_token');
 }
 
+function readStoredUser() {
+  try {
+    const raw = localStorage.getItem('auth_user');
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (_error) {
+    return null;
+  }
+}
+
+function mergeStoredProfile(user) {
+  if (!user) return null;
+
+  const storedUser = readStoredUser();
+  if (!storedUser) return user;
+
+  const storedId = String(storedUser.id || '').trim();
+  const nextId = String(user.id || '').trim();
+  const storedEmail = String(storedUser.email || '').trim().toLowerCase();
+  const nextEmail = String(user.email || '').trim().toLowerCase();
+  const isSameUser = (storedId && nextId && storedId === nextId) || (storedEmail && nextEmail && storedEmail === nextEmail);
+
+  if (!isSameUser) return user;
+
+  return {
+    ...user,
+    avatar: storedUser.avatar || user.avatar,
+    phone: storedUser.phone || user.phone,
+    dateOfBirth: storedUser.dateOfBirth || user.dateOfBirth,
+  };
+}
+
 export function AuthProvider({ children }) {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
@@ -81,7 +113,7 @@ export function AuthProvider({ children }) {
       const normalizedEmail = String(email).trim().toLowerCase();
       const response = await authAPI.login({ email: normalizedEmail, password });
       const token = response?.data?.token;
-      const user = normalizeUser(response?.data?.user);
+      const user = normalizeUser(mergeStoredProfile(response?.data?.user));
 
       if (!token || !user) {
         throw new Error('Login response is missing required user data');
@@ -120,7 +152,7 @@ export function AuthProvider({ children }) {
       }
 
       const response = await authAPI.me();
-      const user = normalizeUser(response?.data?.user);
+      const user = normalizeUser(mergeStoredProfile(response?.data?.user));
 
       if (!user) {
         throw new Error('Authenticated user payload is missing');

@@ -5,13 +5,10 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import AssignmentsPage from './components/Assignments/AssignmentsPage';
 import AttendancePage from './components/Attendance/AttendancePage';
 import LoginPage from './components/Auth/LoginPage';
-import CalendarPage from './components/Calendar/CalendarPage';
 import DashboardPage from './components/Dashboard/DashboardPage';
-import DeveloperToolsPage from './components/DeveloperTools/DeveloperToolsPage';
 import ExamsPage from './components/Exams/ExamsPage';
 import Layout from './components/Layout/Layout';
 import MarksheetsPage from './components/Marksheets/MarksheetsPage';
-import MessagesPage from './components/Messages/MessagesPage';
 import ProfilePage from './components/Profile/ProfilePage';
 import ReportsPage from './components/Reports/ReportsPage';
 import SchedulePage from './components/Schedule/SchedulePage';
@@ -129,27 +126,6 @@ function AppRoutes() {
         <PrivateRoute allowedRoles={[ACCOUNT_ROLES.ADMIN]}>
           <Layout>
             <ReportsPage />
-          </Layout>
-        </PrivateRoute>
-      } />
-      <Route path="/developer-tools" element={
-        <PrivateRoute allowedRoles={[ACCOUNT_ROLES.ADMIN]}>
-          <Layout>
-            <DeveloperToolsPage />
-          </Layout>
-        </PrivateRoute>
-      } />
-      <Route path="/calendar" element={
-        <PrivateRoute allowedRoles={[ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN]}>
-          <Layout>
-            <CalendarPage />
-          </Layout>
-        </PrivateRoute>
-      } />
-      <Route path="/messages" element={
-        <PrivateRoute allowedRoles={[ACCOUNT_ROLES.ADMIN]}>
-          <Layout>
-            <MessagesPage />
           </Layout>
         </PrivateRoute>
       } />

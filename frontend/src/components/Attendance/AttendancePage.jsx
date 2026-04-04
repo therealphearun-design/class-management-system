@@ -23,7 +23,7 @@ const EMPTY_STAFF_FORM = {
   id: '',
   employeeId: '',
   name: '',
-  class: 'Science Department',
+  class: 'Science',
   subject: 'Mathematics',
 };
 
@@ -72,7 +72,7 @@ export default function AttendancePage() {
   }, [isAdmin]);
 
   const resetStaffForm = () => {
-    const defaultDepartment = editableDepartmentOptions[0]?.value || 'Science Department';
+    const defaultDepartment = editableDepartmentOptions[0]?.value || 'Science';
     const defaultSubject = getDepartmentSubjectOptions(defaultDepartment)[0]?.value || '';
     setStaffForm({
       id: '',
@@ -84,7 +84,7 @@ export default function AttendancePage() {
   };
 
   const handleEditStaff = (staff) => {
-    const safeDepartment = staff.class || editableDepartmentOptions[0]?.value || 'Science Department';
+    const safeDepartment = staff.class || editableDepartmentOptions[0]?.value || 'Science';
     const safeSubjects = getDepartmentSubjectOptions(safeDepartment);
     const safeSubject = safeSubjects.some((item) => item.value === staff.subject)
       ? staff.subject
@@ -165,7 +165,7 @@ export default function AttendancePage() {
       ['Shift', selectedShift || 'All'],
       ['Subject', selectedSubject || 'All'],
       [],
-      [isAdmin ? 'Teacher ID' : 'Roll No', `${recordLabel} Name`, isAdmin ? 'Department' : 'Class', 'Shift', 'Status'],
+      [isAdmin ? 'Teacher ID' : 'Roll No', `${recordLabel} Name`, isAdmin ? 'Stream' : 'Class', 'Shift', 'Status'],
       ...rows,
     ]
       .map((line) => line.map(escapeCell).join(','))
@@ -224,7 +224,7 @@ export default function AttendancePage() {
           <tr>
             <th>${escapeHtml(isAdmin ? 'Teacher ID' : 'Roll No')}</th>
             <th>${escapeHtml(`${recordLabel} Name`)}</th>
-            <th>${escapeHtml(isAdmin ? 'Department' : 'Class')}</th>
+            <th>${escapeHtml(isAdmin ? 'Stream' : 'Class')}</th>
             <th>Shift</th>
             <th>Status</th>
           </tr>
@@ -392,7 +392,7 @@ export default function AttendancePage() {
               />
             </div>
             <div>
-              <label htmlFor="staff-department" className="block text-xs font-medium text-gray-600 mb-1">Department</label>
+              <label htmlFor="staff-department" className="block text-xs font-medium text-gray-600 mb-1">Stream</label>
               <select
                 id="staff-department"
                 value={staffForm.class}

@@ -9,11 +9,8 @@ import {
   HiOutlineBookOpen,
   HiOutlineAcademicCap,
   HiOutlineChartBar,
-  HiOutlineMail,
-  HiOutlineClock,
   HiOutlineUser,
   HiOutlineSearch,
-  HiOutlineCog,
 } from 'react-icons/hi';
 import { NavLink } from 'react-router-dom';
 
@@ -24,15 +21,12 @@ const menuItems = [
   { path: '/dashboard', icon: HiOutlineHome, label: 'Dashboard', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN] },
   { path: '/attendance', icon: HiOutlineClipboardCheck, label: 'Attendance', roles: [ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN] },
   { path: '/students', icon: HiOutlineUserGroup, label: 'Students', roles: [ACCOUNT_ROLES.ADMIN] },
-  { path: '/student-lookup', icon: HiOutlineSearch, label: 'Student Lookup', roles: [ACCOUNT_ROLES.ADMIN] },
+  { path: '/student-lookup', icon: HiOutlineSearch, label: 'User Lookup', roles: [ACCOUNT_ROLES.ADMIN] },
   { path: '/schedule', icon: HiOutlineCalendar, label: 'Class Schedule', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN] },
   { path: '/marksheets', icon: HiOutlineDocumentText, label: 'Marksheets', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.ADMIN] },
   { path: '/assignments', icon: HiOutlineBookOpen, label: 'Assignments', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER] },
   { path: '/exams', icon: HiOutlineAcademicCap, label: 'Exam Schedule', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN] },
   { path: '/reports', icon: HiOutlineChartBar, label: 'Reports', roles: [ACCOUNT_ROLES.ADMIN] },
-  { path: '/messages', icon: HiOutlineMail, label: 'SMS/Mail', roles: [ACCOUNT_ROLES.ADMIN] },
-  { path: '/calendar', icon: HiOutlineClock, label: 'Calendar', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN] },
-  { path: '/developer-tools', icon: HiOutlineCog, label: 'Developer Tools', roles: [ACCOUNT_ROLES.ADMIN], adminCenterOnly: true },
   { path: '/profile', icon: HiOutlineUser, label: 'My Profile', roles: [ACCOUNT_ROLES.STUDENT, ACCOUNT_ROLES.TEACHER, ACCOUNT_ROLES.ADMIN] },
 ];
 

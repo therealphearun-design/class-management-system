@@ -19,6 +19,9 @@ CREATE TABLE IF NOT EXISTS students (
   section VARCHAR(5) NOT NULL,
   gender ENUM('male', 'female') NOT NULL DEFAULT 'male',
   dob DATE NULL,
+  email VARCHAR(150) NULL UNIQUE,
+  current_address VARCHAR(255) NULL,
+  user_id INT NULL UNIQUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

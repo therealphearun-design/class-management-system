@@ -1,0 +1,57 @@
+email,employee_code,full_name,gender,department,subject_name,phone,is_active
+sokha.chan1@school.local,T0001,Chan Sokha,male,Science,Mathematics,012345601,1
+sokha.lim2@school.local,T0002,Lim Sokha,female,Social,English,012345602,1
+sokha.ouk3@school.local,T0003,Ouk Sokha,male,Science,Physics,012345603,1
+sokha.touch4@school.local,T0004,Touch Sokha,female,Social,History,012345604,1
+sokha.phan5@school.local,T0005,Phan Sokha,male,Science,Chemistry,012345605,1
+sokha.suon6@school.local,T0006,Suon Sokha,female,Social,Khmer Language & Literature,012345606,1
+sokha.heng7@school.local,T0007,Heng Sokha,male,Science,Digital Literacy / ICT,012345607,1
+sokha.lay8@school.local,T0008,Lay Sokha,female,Social,Physical Education & Sports,012345608,1
+sokha.kim9@school.local,T0009,Kim Sokha,male,Science,Mathematics,012345609,1
+sokha.ros10@school.local,T0010,Ros Sokha,female,Social,English,012345610,1
+sokha.meas11@school.local,T0011,Meas Sokha,male,Science,Physics,012345611,1
+sokha.chhay12@school.local,T0012,Chhay Sokha,female,Social,History,012345612,1
+sokha.sok13@school.local,T0013,Sok Sokha,male,Science,Chemistry,012345613,1
+sokha.pen14@school.local,T0014,Pen Sokha,female,Social,Khmer Language & Literature,012345614,1
+sreynang.chan15@school.local,T0015,Chan Sreynang,male,Science,Digital Literacy / ICT,012345615,1
+sreynang.lim16@school.local,T0016,Lim Sreynang,female,Social,Physical Education & Sports,012345616,1
+sreynang.ouk17@school.local,T0017,Ouk Sreynang,male,Science,Mathematics,012345617,1
+sreynang.touch18@school.local,T0018,Touch Sreynang,female,Social,English,012345618,1
+sreynang.phan19@school.local,T0019,Phan Sreynang,male,Science,Physics,012345619,1
+sreynang.suon20@school.local,T0020,Suon Sreynang,female,Social,History,012345620,1
+sreynang.heng21@school.local,T0021,Heng Sreynang,male,Science,Chemistry,012345621,1
+sreynang.lay22@school.local,T0022,Lay Sreynang,female,Social,Khmer Language & Literature,012345622,1
+sreynang.kim23@school.local,T0023,Kim Sreynang,male,Science,Digital Literacy / ICT,012345623,1
+sreynang.ros24@school.local,T0024,Ros Sreynang,female,Social,Physical Education & Sports,012345624,1
+sreynang.meas25@school.local,T0025,Meas Sreynang,male,Science,Mathematics,012345625,1
+sreynang.chhay26@school.local,T0026,Chhay Sreynang,female,Social,English,012345626,1
+sreynang.sok27@school.local,T0027,Sok Sreynang,male,Science,Physics,012345627,1
+sreynang.pen28@school.local,T0028,Pen Sreynang,female,Social,History,012345628,1
+piseth.chan29@school.local,T0029,Chan Piseth,male,Science,Chemistry,012345629,1
+piseth.lim30@school.local,T0030,Lim Piseth,female,Social,Khmer Language & Literature,012345630,1
+piseth.ouk31@school.local,T0031,Ouk Piseth,male,Science,Digital Literacy / ICT,012345631,1
+piseth.touch32@school.local,T0032,Touch Piseth,female,Social,Physical Education & Sports,012345632,1
+piseth.phan33@school.local,T0033,Phan Piseth,male,Science,Mathematics,012345633,1
+piseth.suon34@school.local,T0034,Suon Piseth,female,Social,English,012345634,1
+piseth.heng35@school.local,T0035,Heng Piseth,male,Science,Physics,012345635,1
+piseth.lay36@school.local,T0036,Lay Piseth,female,Social,History,012345636,1
+piseth.kim37@school.local,T0037,Kim Piseth,male,Science,Chemistry,012345637,1
+piseth.ros38@school.local,T0038,Ros Piseth,female,Social,Khmer Language & Literature,012345638,1
+piseth.meas39@school.local,T0039,Meas Piseth,male,Science,Digital Literacy / ICT,012345639,1
+piseth.chhay40@school.local,T0040,Chhay Piseth,female,Social,Physical Education & Sports,012345640,1
+piseth.sok41@school.local,T0041,Sok Piseth,male,Science,Mathematics,012345641,1
+piseth.pen42@school.local,T0042,Pen Piseth,female,Social,English,012345642,1
+bopha.chan43@school.local,T0043,Chan Bopha,male,Science,Physics,012345643,1
+bopha.lim44@school.local,T0044,Lim Bopha,female,Social,History,012345644,1
+bopha.ouk45@school.local,T0045,Ouk Bopha,male,Science,Chemistry,012345645,1
+bopha.touch46@school.local,T0046,Touch Bopha,female,Social,Khmer Language & Literature,012345646,1
+bopha.phan47@school.local,T0047,Phan Bopha,male,Science,Digital Literacy / ICT,012345647,1
+bopha.suon48@school.local,T0048,Suon Bopha,female,Social,Physical Education & Sports,012345648,1
+bopha.heng49@school.local,T0049,Heng Bopha,male,Science,Mathematics,012345649,1
+bopha.lay50@school.local,T0050,Lay Bopha,female,Social,English,012345650,1
+bopha.kim51@school.local,T0051,Kim Bopha,male,Science,Physics,012345651,1
+bopha.ros52@school.local,T0052,Ros Bopha,female,Social,History,012345652,1
+bopha.meas53@school.local,T0053,Meas Bopha,male,Science,Chemistry,012345653,1
+bopha.chhay54@school.local,T0054,Chhay Bopha,female,Social,Khmer Language & Literature,012345654,1
+bopha.sok55@school.local,T0055,Sok Bopha,male,Science,Digital Literacy / ICT,012345655,1
+bopha.pen56@school.local,T0056,Pen Bopha,female,Social,Physical Education & Sports,012345656,1
